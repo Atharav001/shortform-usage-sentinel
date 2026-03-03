@@ -36,8 +36,9 @@ To solve the "Micro-Scroll" problem—where a single physical flick triggers mul
 
 | Tracking Dashboard | Accessibility Setup | Structural Detection |
 | :---: | :---: | :---: |
-| [Insert Image] | [Insert Image] | [Insert Image] |
-| *Real-time swipe counter* | *One-tap service activation* | *Visualizing the 70% rule* |
+| <img width="786" height="1600" alt="image" src="https://github.com/user-attachments/assets/7d67b7d8-cd74-4c74-a220-355ee97fedf0" />| <img width="712" height="1406" alt="image" src="https://github.com/user-attachments/assets/d4be32e1-cf78-4bdc-a194-e04003468f6c" />| <img width="785" height="1600" alt="image" src="https://github.com/user-attachments/assets/db1e634d-98a5-4cfb-bc43-416dc19a1e04" />
+ 
+
 
 ---
 
