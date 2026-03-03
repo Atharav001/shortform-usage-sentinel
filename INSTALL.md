@@ -1,63 +1,52 @@
 # 🚀 Installation & Setup Guide
 
-Follow these steps to set up the development environment for **Scroller's Dashboard** or to sideload the app onto your device.
+This guide covers how to install **Scroller's Dashboard** directly on your Android device or set up the development environment.
 
 ---
 
-## 🛠️ Prerequisites
-* **Android Studio Jellyfish** (or newer)
-* **Android SDK 34+** (Android 14 "Upside Down Cake")
-* **Physical Android Device:** Recommended for testing Accessibility Services (emulators often struggle with precise gesture physics).
+## 📲 Option 1: Direct Installation (Recommended for Users)
+
+If you just want to use the app to track your usage, follow these steps directly on your Android device:
+
+1. **Download the APK:** Navigate to the [Releases](https://github.com/Atharav001/shortform-usage-sentinel/releases) section of this repository and download the latest `.apk` file.
+2. **Allow Unknown Sources:** If prompted by your browser, allow "Installation from Unknown Sources."
+3. **Install:** Open the downloaded file and tap **Install**.
+
+### 🛠️ Required Setup (Crucial)
+Because this app uses a privacy-first structural tracking method, you must manually enable the engine:
+1. Open **Settings** > **Accessibility**.
+2. Tap on **Installed Apps** or **Downloaded Services**.
+3. Select **Scroller's Dashboard** and toggle the switch to **ON**.
+4. **Note:** This permission allows the app to detect when a Reel/Short container is on screen. **No screen recording or data collection occurs.**
+
+[Image of Android Accessibility settings menu showing the toggle to enable a service]
 
 ---
 
-## 💻 Developer Setup
-1. **Clone the Repository:**
+## 💻 Option 2: Developer Setup (For Code Contribution)
+
+If you want to modify the code or build the app from source:
+
+1. **Prerequisites:**
+   * Android Studio Jellyfish+
+   * Android SDK 34
+2. **Clone the repository:**
    ```bash
    git clone [https://github.com/Atharav001/shortform-usage-sentinel.git](https://github.com/Atharav001/shortform-usage-sentinel.git)
 
-_(Note: Ensure you use the updated project URL)._
-
-2\. **Open in Android Studio:** Allow the Gradle sync to complete. This project utilizes Android Studio AI features; ensuring your IDE is up to date will help with viewing the iterative logic suggestions in the codebase.3. **Build the APK:** Go to Build > Build Bundle(s) / APK(s) > Build APK(s).
-
-3\. Enabling the Service (Crucial Step)
----------------------------------------
-
-Because this app uses the **Accessibility Service API**, it will not track data until manual permission is granted:
-
-1.  **Install the APK** on your device.
-    
-2.  Navigate to **Settings** > **Accessibility**.
-    
-3.  Find **"Scroller's Dashboard"** under the 'Downloaded Apps' or 'Installed Services' section.
-    
-4.  Toggle **Use Service** to **ON**.
+1.  **Build:** Open in Android Studio and go to Build > Build APK(s).
     
 
-4\. Verification
-----------------
+🧪 Verification
+---------------
 
-1.  **Open Instagram or YouTube.**
-    
-2.  **Navigate to the Reels or Shorts tab.**
-    
-3.  **Perform a few full-screen swipes.**
-    
-4.  **Return to the app** to see the **"Buffered"** counts update in real-time.
-    
+To ensure the logic is calibrated correctly for your device:
 
-🧪 Technical Deep Dive: The Validation Flow
--------------------------------------------
-
-The core engine follows this decision tree for every scroll event detected to ensure near-perfect accuracy:
-
-*   **App Check:** Is the packageName either com.instagram.android or com.google.android.youtube?
+1.  Open Instagram Reels.
     
-*   **Class Check:** Is the className a RecyclerView or ViewPager?
+2.  Perform a **short flick** (under 900ms). The counter should only increment once due to the **Physics Debounce** rule.
     
-*   **Geometry Check:** Does the AccessibilityNodeInfo bounds-in-screen height cover **\> 70%** of the device's y-axis?
-    
-*   **Debounce Check:** Has it been **\> 900ms** since the last validated increment?
+3.  Open the **Comments section**. Scroll through them; the counter should **not** move, as the container height is below the **70% Threshold**.
     
 
 🤝 Contributing
