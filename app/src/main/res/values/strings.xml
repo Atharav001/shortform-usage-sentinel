@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Scroller\'s Dashboard</string>
+    <string name="accessibility_service_description">Tracks your scroll progress on Instagram Reels and YouTube Shorts.</string>
+</resources>
