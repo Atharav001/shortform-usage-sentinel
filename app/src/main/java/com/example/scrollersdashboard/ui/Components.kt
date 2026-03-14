@@ -88,64 +88,94 @@ fun UsageCard(
     dailyGoal: Int,
     isDarkMode: Boolean
 ) {
-    val gradient = if (platform.lowercase() == "instagram") InstaNeonGradient else YTNeonGradient
-    val icon = if (platform.lowercase() == "instagram") Icons.Default.PhotoCamera else Icons.Default.PlayArrow
+    val gradient = if (platform.lowercase() == "instagram") {
+        listOf(Color(0xFFC13584), Color(0xFFE1306C), Color(0xFFFF8C00))
+    } else {
+        listOf(Color(0xFFFF0000), Color(0xFFFF4D4D))
+    }
     
+    val animatedPercentage by animateFloatAsState(
+        targetValue = percentage.toFloat(),
+        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        label = "percentage"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Gray800.copy(alpha = 0.5f))
-            .border(1.dp, Gray700, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(32.dp))
+            .background(Color(0xFF151518))
             .padding(16.dp)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(80.dp)) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(130.dp)) {
+                // The dark inner circle background
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF0A0A0C))
+                )
+                
                 // Progress Ring
-                Canvas(modifier = Modifier.size(70.dp)) {
-                    val strokeWidth = 6.dp.toPx()
+                Canvas(modifier = Modifier.size(120.dp)) {
+                    val strokeWidth = 14.dp.toPx()
                     val radius = (size.width - strokeWidth) / 2
                     
+                    // Track
                     drawCircle(
-                        color = Gray700,
+                        color = Color.White.copy(alpha = 0.05f),
                         radius = radius,
                         style = Stroke(width = strokeWidth)
                     )
                     
+                    // Progress Arc
                     drawArc(
-                        brush = Brush.sweepGradient(gradient),
+                        brush = if (gradient.size > 1) {
+                            Brush.sweepGradient(
+                                0.0f to gradient[0],
+                                0.5f to gradient[1],
+                                1.0f to gradient.last()
+                            )
+                        } else {
+                            SolidColor(gradient[0])
+                        },
                         startAngle = -90f,
-                        sweepAngle = 360f * (percentage.toFloat() / 100f),
+                        sweepAngle = 360f * (animatedPercentage / 100f),
                         useCenter = false,
                         style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
                 }
-                Icon(
-                    icon, 
-                    contentDescription = null, 
-                    tint = Color.White, 
-                    modifier = Modifier.size(24.dp)
-                )
+                
+                // Text inside the ring
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = scrollCount.toString(),
+                        color = Color.White,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Black,
+                        lineHeight = 28.sp
+                    )
+                    Text(
+                        text = "/$dailyGoal",
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             Text(
                 platform.replaceFirstChar { it.uppercase() },
-                color = Gray400,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold
             )
             
             Text(
                 screenTime,
-                color = Color.White,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-            
-            Text(
-                "$scrollCount scrolls",
                 color = Gray500,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
