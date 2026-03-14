@@ -7,16 +7,20 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
-import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
-import android.widget.Button
-import android.widget.TextView
-import androidx.room.Room
+import androidx.compose.ui.platform.ComposeView
+import androidx.lifecycle.*
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.example.scrollersdashboard.ui.TodoHabitPanel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,12 +39,12 @@ class ScrollerAccessibilityService : AccessibilityService() {
     
     private var overlayView: View? = null
     private lateinit var windowManager: WindowManager
+    private var currentLifecycleOwner: OverlayLifecycleOwner? = null
 
     private val pendingCounts = mutableMapOf<String, Int>()
     private var flushJob: Job? = null
     private val BATCH_SIZE = 3 
 
-    // Tracker for alert intervals
     private val lastAlertedCount = mutableMapOf<String, Int>()
     private var lastAlertDate: String? = null
 
@@ -49,12 +53,13 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
     private var syncJob: Job? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        db = AppDatabase.getDatabase(this)
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
-        db = Room.databaseBuilder(
-            applicationContext,
-            AppDatabase::class.java, "scroller-db"
-        ).fallbackToDestructiveMigration().build()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
         Log.d(TAG, "Service Connected and Ready")
@@ -67,7 +72,7 @@ class ScrollerAccessibilityService : AccessibilityService() {
         syncJob = serviceScope.launch {
             while (true) {
                 syncScreenTimeWithSystem()
-                delay(30000) // Sync every 30 seconds
+                delay(30000) 
             }
         }
     }
@@ -114,7 +119,6 @@ class ScrollerAccessibilityService : AccessibilityService() {
                     removeOverlay()
                 }
             }
-            // Trigger an immediate sync when app state changes
             serviceScope.launch { syncScreenTimeWithSystem() }
         }
 
@@ -146,12 +150,17 @@ class ScrollerAccessibilityService : AccessibilityService() {
     }
 
     private fun recordScrollBuffered(appType: String) {
+        if (!::db.isInitialized) return
         serviceScope.launch {
             val dao = db.scrollDao()
             val trackKey = if (appType == "Instagram") "track_ig" else "track_yt"
             val isTrackingEnabled = dao.getSetting(trackKey)?.toBoolean() ?: true
             
             if (!isTrackingEnabled) return@launch
+
+            // Insert individual scroll event for detailed activity analysis
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            dao.insertEvent(ScrollEvent(timestamp = System.currentTimeMillis(), appType = appType, date = today))
 
             synchronized(pendingCounts) {
                 val current = pendingCounts[appType] ?: 0
@@ -181,17 +190,9 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
         serviceScope.launch {
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            val currentTime = System.currentTimeMillis()
             val dao = db.scrollDao()
 
             toFlush.forEach { (appType, count) ->
-                val focusUntil = dao.getSetting("focus_until")?.toLongOrNull() ?: 0L
-                if (currentTime < focusUntil) return@forEach
-
-                repeat(count) { i ->
-                    dao.insertEvent(ScrollEvent(timestamp = currentTime - (i * 10), appType = appType, date = today))
-                }
-                
                 val record = dao.getRecord(today, appType)
                 val newCount = (record?.scrollCount ?: 0) + count
                 
@@ -219,15 +220,14 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
         serviceScope.launch {
             val dao = db.scrollDao()
+            val isAlertEnabled = dao.getSetting("alert_screen_enabled")?.toBoolean() ?: true
+            if (!isAlertEnabled) return@launch
+
             val gapKey = if (appType == "Instagram") "alert_gap_ig" else "alert_gap_yt"
             val n = dao.getSetting(gapKey)?.toIntOrNull() ?: 10
             
             val lastAlerted = lastAlertedCount[appType] ?: 0
             
-            // Show alert if:
-            // 1. Never alerted before today (lastAlerted == 0)
-            // 2. User reset the count (currentTotalCount < lastAlerted)
-            // 3. n reels/shorts have passed since last alert
             if (lastAlerted == 0 || currentTotalCount < lastAlerted || (currentTotalCount - lastAlerted) >= n) {
                 lastAlertedCount[appType] = currentTotalCount
                 serviceScope.launch(Dispatchers.Main) {
@@ -239,30 +239,53 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
     private fun showLimitReachedOverlay(appType: String) {
         if (overlayView != null) return
+        Log.d(TAG, "showLimitReachedOverlay for $appType")
+        
+        val lifecycleOwner = OverlayLifecycleOwner()
+        lifecycleOwner.performRestore(null)
+        
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.CENTER }
-        
-        val inflater = getSystemService(LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        overlayView = inflater.inflate(R.layout.overlay_limit_reached, null)
-        
-        overlayView?.findViewById<TextView>(R.id.overlay_text)?.text = "Daily Limit Reached for $appType"
-        overlayView?.findViewById<Button>(R.id.close_overlay_button)?.setOnClickListener {
-            removeOverlay()
+        ).apply { 
+            gravity = Gravity.CENTER
+            flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
         }
-        windowManager.addView(overlayView, params)
+        
+        val composeView = ComposeView(this).apply {
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeViewModelStoreOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            setContent {
+                TodoHabitPanel(db = db, appName = appType, onDismiss = { removeOverlay() })
+            }
+        }
+        
+        try {
+            windowManager.addView(composeView, params)
+            overlayView = composeView
+            currentLifecycleOwner = lifecycleOwner
+            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error adding overlay: ${e.message}")
+        }
     }
 
     private fun removeOverlay() {
         overlayView?.let {
+            currentLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+            currentLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+            currentLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
             try {
                 windowManager.removeView(it)
             } catch (e: Exception) {}
             overlayView = null
+            currentLifecycleOwner = null
         }
     }
 
@@ -280,6 +303,25 @@ class ScrollerAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         syncJob?.cancel()
         flushBuffer()
+        removeOverlay()
         super.onDestroy()
+    }
+
+    private class OverlayLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
+        private val lifecycleRegistry = LifecycleRegistry(this)
+        private val savedStateRegistryController = SavedStateRegistryController.create(this)
+        private val store = ViewModelStore()
+
+        override val lifecycle: Lifecycle get() = lifecycleRegistry
+        override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
+        override val viewModelStore: ViewModelStore get() = store
+
+        fun performRestore(savedState: Bundle?) {
+            savedStateRegistryController.performRestore(savedState)
+        }
+
+        fun handleLifecycleEvent(event: Lifecycle.Event) {
+            lifecycleRegistry.handleLifecycleEvent(event)
+        }
     }
 }

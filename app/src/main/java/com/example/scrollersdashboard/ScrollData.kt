@@ -18,7 +18,7 @@ data class ScrollRecord(
     val date: String,
     val appType: String,
     val scrollCount: Int,
-    val screenTimeMillis: Long = 0L // New field for screen time
+    val screenTimeMillis: Long = 0L
 )
 
 @Entity(tableName = "scroll_events")
@@ -33,6 +33,21 @@ data class ScrollEvent(
 data class UserSetting(
     @PrimaryKey val key: String,
     val value: String
+)
+
+@Entity(tableName = "todo_tasks")
+data class TodoTask(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val title: String,
+    val isCompleted: Boolean = false,
+    val date: String // resets daily
+)
+
+@Entity(tableName = "habit_tasks")
+data class HabitTask(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val title: String,
+    val lastCompletedDate: String = "" // Items remain, completion resets
 )
 
 @Dao
@@ -78,9 +93,29 @@ interface ScrollDao {
 
     @Query("SELECT value FROM user_settings WHERE key = :key")
     fun getSettingFlow(key: String): Flow<String?>
+
+    // --- Todo Tasks ---
+    @Query("SELECT * FROM todo_tasks WHERE date = :date ORDER BY id DESC")
+    fun getTodoTasks(date: String): Flow<List<TodoTask>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTodo(task: TodoTask)
+
+    @Query("DELETE FROM todo_tasks WHERE id = :id")
+    suspend fun deleteTodo(id: Int)
+
+    // --- Habit Tasks ---
+    @Query("SELECT * FROM habit_tasks ORDER BY id DESC")
+    fun getHabitTasks(): Flow<List<HabitTask>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertHabit(habit: HabitTask)
+
+    @Query("DELETE FROM habit_tasks WHERE id = :id")
+    suspend fun deleteHabit(id: Int)
 }
 
-@Database(entities = [ScrollRecord::class, ScrollEvent::class, UserSetting::class], version = 4) // Bumped version to 4
+@Database(entities = [ScrollRecord::class, ScrollEvent::class, UserSetting::class, TodoTask::class, HabitTask::class], version = 5)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun scrollDao(): ScrollDao
 
