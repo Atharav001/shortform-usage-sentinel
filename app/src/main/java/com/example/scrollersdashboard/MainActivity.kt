@@ -622,7 +622,17 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
     
     val habitTasks by db.scrollDao().getHabitTasks().collectAsState(initial = emptyList())
-    val todoTasks by db.scrollDao().getTodoTasks(today).collectAsState(initial = emptyList())
+    
+    val refreshDailyTodoState = db.scrollDao().getSettingFlow("refresh_daily_todo").collectAsState(initial = "true")
+    val isRefreshDaily = refreshDailyTodoState.value?.toBoolean() ?: true
+
+    val todoTasks by (if (isRefreshDaily) db.scrollDao().getTodoTasks(today) else db.scrollDao().getAllTodoTasks()).collectAsState(initial = emptyList())
+
+    LaunchedEffect(isRefreshDaily) {
+        if (isRefreshDaily) {
+            db.scrollDao().deleteOldTodos(today)
+        }
+    }
 
     val habitsCompleted = habitTasks.count { it.lastCompletedDate == today }
     val todosCompleted = todoTasks.count { it.isCompleted }
@@ -630,7 +640,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
     val habitProgress = if (habitTasks.isNotEmpty()) (habitsCompleted.toFloat() / habitTasks.size) else 0f
     val todoProgress = if (todoTasks.isNotEmpty()) (todosCompleted.toFloat() / todoTasks.size) else 0f
 
-    var showAddTaskDialog by remember { mutableStateOf(false) }
     var newTaskText by remember { mutableStateOf("") }
 
     val textColor = if (isDarkMode) Color.White else Color.Black
@@ -648,15 +657,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
             )
         },
-        containerColor = Gray900,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddTaskDialog = true },
-                containerColor = Color(0xFF007AFF),
-                contentColor = Color.White,
-                shape = CircleShape
-            ) { Icon(Icons.Default.Add, "Add Task") }
-        }
+        containerColor = Gray900
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
             // View Switcher (Habits vs Todos)
@@ -711,7 +712,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column {
-                        Text("Today's Progress", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text("Today's Progress", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Text(countText, color = progressColor.copy(alpha = 0.8f), fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(16.dp))
                         // Progress Bar
@@ -719,13 +720,140 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                             Box(modifier = Modifier.fillMaxWidth(currentProgress).fillMaxHeight().background(progressColor))
                         }
                     }
-                    Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(Gray800), contentAlignment = Alignment.Center) {
-                        Text("${(currentProgress * 100).toInt()}%", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                    }
+                    Text("${(currentProgress * 100).toInt()}%", color = Color.White, fontWeight = FontWeight.Black, fontSize = 28.sp)
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
+
+            // Information Box / Refresh Daily Card
+            if (selectedView == "habits") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF007AFF).copy(alpha = 0.1f))
+                        .border(1.dp, Color(0xFF007AFF).copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = Color(0xFF007AFF),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Daily Habits are permanent tasks that appear every day. Only completion status resets at midnight - the habits themselves remain until you delete them.",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            } else {
+                // Refresh Daily Card for To-Do tasks
+                val todoCardColor = Color(0xFF6366F1)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(todoCardColor.copy(alpha = 0.15f))
+                        .border(1.dp, todoCardColor.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
+                        .padding(20.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(todoCardColor),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CalendarToday, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Refresh Daily", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("Tasks reset each day", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                            }
+                            Switch(
+                                checked = isRefreshDaily,
+                                onCheckedChange = { newValue ->
+                                    scope.launch {
+                                        db.scrollDao().saveSetting(UserSetting("refresh_daily_todo", newValue.toString()))
+                                    }
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = todoCardColor,
+                                    checkedTrackColor = todoCardColor.copy(alpha = 0.5f)
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = if (isRefreshDaily) "All tasks (completed or not) will be deleted at midnight for a fresh start." else "Tasks will remain saved and will not be refreshed or deleted automatically.",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Inline Add Task Input
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextField(
+                    value = newTaskText,
+                    onValueChange = { newTaskText = it },
+                    placeholder = { Text(if (selectedView == "habits") "Add a new daily habit..." else "Add a new task...", color = Color.Gray) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Gray800),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        cursorColor = Color.White,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    ),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                IconButton(
+                    onClick = {
+                        if (newTaskText.isNotBlank()) {
+                            scope.launch {
+                                if (selectedView == "habits") db.scrollDao().insertHabit(HabitTask(title = newTaskText))
+                                else db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = today))
+                                newTaskText = ""
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(progressColor)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add", tint = Color.White)
+                }
+            }
 
             // Task List
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -755,37 +883,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                 }
             }
         }
-    }
-
-    if (showAddTaskDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddTaskDialog = false },
-            containerColor = Gray800,
-            title = { Text("Add New ${if (selectedView == "habits") "Habit" else "Task"}", color = Color.White) },
-            text = {
-                OutlinedTextField(
-                    value = newTaskText,
-                    onValueChange = { newTaskText = it },
-                    placeholder = { Text("Enter title...") },
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (newTaskText.isNotBlank()) {
-                        scope.launch {
-                            if (selectedView == "habits") db.scrollDao().insertHabit(HabitTask(title = newTaskText))
-                            else db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = today))
-                            newTaskText = ""
-                            showAddTaskDialog = false
-                        }
-                    }
-                }) { Text("Add", color = Color(0xFF007AFF)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddTaskDialog = false }) { Text("Cancel", color = Color.Gray) }
-            }
-        )
     }
 }
 

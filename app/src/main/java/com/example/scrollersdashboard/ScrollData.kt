@@ -101,11 +101,17 @@ interface ScrollDao {
     @Query("SELECT * FROM todo_tasks WHERE date = :date ORDER BY id DESC")
     fun getTodoTasks(date: String): Flow<List<TodoTask>>
 
+    @Query("SELECT * FROM todo_tasks ORDER BY id DESC")
+    fun getAllTodoTasks(): Flow<List<TodoTask>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTodo(task: TodoTask)
 
     @Query("DELETE FROM todo_tasks WHERE id = :id")
     suspend fun deleteTodo(id: Int)
+
+    @Query("DELETE FROM todo_tasks WHERE date < :today")
+    suspend fun deleteOldTodos(today: String)
 
     // --- Habit Tasks ---
     @Query("SELECT * FROM habit_tasks ORDER BY id DESC")
