@@ -12,13 +12,20 @@
     <color name="gray_900">#0A0A0C</color>
     <color name="gray_800">#151518</color>
     <color name="gray_700">#242427</color>
+    <color name="gray_600">#4B5563</color>
     <color name="gray_500">#6B7280</color>
     <color name="gray_400">#9CA3AF</color>
     <color name="gray_300">#D1D5DB</color>
 
     <color name="green_400">#4ADE80</color>
-    <color name="green_700">#047857</color>
+    <color name="green_500">#22C55E</color>
+    <color name="green_600">#16A34A</color>
+    <color name="green_700">#15803D</color>
     <color name="green_900">#064E3B</color>
+
+    <color name="emerald_400">#34D399</color>
+    <color name="emerald_500">#10B981</color>
+    <color name="emerald_600">#059669</color>
 
     <color name="yellow_400">#FACC15</color>
     <color name="yellow_500">#EAB308</color>
@@ -27,6 +34,7 @@
     <color name="orange_500">#F97316</color>
     <color name="orange_600">#EA580C</color>
 
+    <color name="blue_400">#60A5FA</color>
     <color name="blue_500">#3B82F6</color>
     <color name="blue_600">#2563EB</color>
     <color name="blue_300">#93C5FD</color>
@@ -38,4 +46,24 @@
 
     <color name="purple_600">#9333EA</color>
     <color name="pink_600">#DB2777</color>
+
+    <!-- Alpha Variants -->
+    <color name="black_95">#F2000000</color>
+    <color name="gray_800_50">#80151518</color>
+    <color name="gray_800_30">#4D151518</color>
+    <color name="gray_900_50">#800A0A0C</color>
+
+    <color name="instagram_bg_start">#339333EA</color>
+    <color name="instagram_bg_end">#33DB2777</color>
+    <color name="instagram_border">#4D6200EE</color>
+
+    <color name="youtube_bg_start">#33DC2626</color>
+    <color name="youtube_bg_end">#33B91C1C</color>
+    <color name="youtube_border">#4DEF4444</color>
+
+    <color name="green_500_10">#1A22C55E</color>
+    <color name="blue_500_10">#1A3B82F6</color>
+    <color name="yellow_500_10">#1AEAB308</color>
+    <color name="orange_500_10">#1AF97316</color>
+
 </resources>

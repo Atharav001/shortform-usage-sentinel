@@ -582,16 +582,6 @@ fun BottomNavigationBar(onStats: (Offset) -> Unit, onGoals: (Offset) -> Unit, on
             .padding(bottom = 24.dp, top = 8.dp)
     ) {
         Column {
-            // Blue indicator at the top
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .padding(horizontal = 48.dp)
-                    .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
-                    .background(Color(0xFF007AFF).copy(alpha = 0.8f))
-            )
-            
             Spacer(modifier = Modifier.height(12.dp))
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
