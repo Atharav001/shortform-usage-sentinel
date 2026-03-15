@@ -73,6 +73,9 @@ interface ScrollDao {
     @Query("SELECT * FROM scroll_data ORDER BY date DESC LIMIT 180")
     fun getRecentRecords(): Flow<List<ScrollRecord>>
 
+    @Query("SELECT * FROM scroll_data ORDER BY date DESC")
+    fun getAllRecords(): Flow<List<ScrollRecord>>
+
     @Query("DELETE FROM scroll_data")
     suspend fun deleteAll()
 

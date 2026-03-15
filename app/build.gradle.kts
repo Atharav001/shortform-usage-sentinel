@@ -79,6 +79,11 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended")
     
+    // UI components for XML layouts
+    implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.cardview)
+    implementation(libs.androidx.recyclerview)
+
     // Biometric
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
     

@@ -57,16 +57,11 @@ fun GlassCard(
         Box(
             modifier = Modifier
                 .matchParentSize()
-                .background(Color.White.copy(alpha = 0.1f)) // Translucent background
+                .background(Color(0xFF1F2937).copy(alpha = 0.3f))
                 .blur(radius = 15.dp) // The "Liquid" blur effect
                 .border(
                     width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.5f),
-                            Color.Transparent
-                        )
-                    ),
+                    color = Color(0xFF374151),
                     shape = RoundedCornerShape(cornerRadius)
                 )
         )
@@ -106,7 +101,8 @@ fun UsageCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(32.dp))
-            .background(Color(0xFF151518))
+            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+            .border(1.dp, Color(0xFF374151), RoundedCornerShape(32.dp))
             .padding(16.dp)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -670,6 +666,21 @@ fun PermissionItem(title: String, isGranted: Boolean, isDarkMode: Boolean) {
             modifier = Modifier.size(24.dp)
         )
     }
+}
+
+fun formatMillisToTime(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    if (hours > 0) return "${hours}h ${minutes}m"
+    return "${minutes}m"
+}
+
+fun formatTotalTime(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    return "${hours}h ${minutes}m"
 }
 
 // Compatibility helpers

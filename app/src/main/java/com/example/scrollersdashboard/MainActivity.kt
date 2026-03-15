@@ -17,24 +17,21 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.RotateLeft
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -43,9 +40,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -53,10 +51,9 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.*
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -156,7 +153,9 @@ class MainActivity : FragmentActivity() {
                     )
                 }
 
-                Box(modifier = Modifier.fillMaxSize().background(Gray900)) {
+                Box(modifier = Modifier
+                    .fillMaxSize()
+                    .background(Brush.verticalGradient(listOf(Color(0xFF0F172A), Color(0xFF1F2937), Color(0xFF0F172A))))) {
                     DashboardScreen(
                         db = db,
                         isDarkMode = isDarkMode,
@@ -190,6 +189,15 @@ class MainActivity : FragmentActivity() {
                                 revealAnim.animateTo(1f, tween(400, easing = FastOutSlowInEasing))
                                 currentScreen = "goals"
                             }
+                        },
+                        onNavigateToHistory = { center: Offset ->
+                            rippleCenter = center
+                            scope.launch {
+                                overlayScreen = "history"
+                                revealAnim.snapTo(0f)
+                                revealAnim.animateTo(1f, tween(400, easing = FastOutSlowInEasing))
+                                currentScreen = "history"
+                            }
                         }
                     )
 
@@ -199,7 +207,7 @@ class MainActivity : FragmentActivity() {
                         Box(modifier = Modifier
                             .fillMaxSize()
                             .clip(CircularRevealShape(revealAnim.value, rippleCenter))
-                            .background(Gray900)
+                            .background(Brush.verticalGradient(listOf(Color(0xFF0F172A), Color(0xFF1F2937), Color(0xFF0F172A))))
                         ) {
                             when (activeOverlay) {
                                 "activity" -> ActivityScreen(
@@ -214,6 +222,11 @@ class MainActivity : FragmentActivity() {
                                     onBack = { center: Offset -> navigateBack(center) }
                                 )
                                 "goals" -> GoalsScreen(
+                                    db = db,
+                                    isDarkMode = isDarkMode,
+                                    onBack = { center: Offset -> navigateBack(center) }
+                                )
+                                "history" -> HistoryScreen(
                                     db = db,
                                     isDarkMode = isDarkMode,
                                     onBack = { center: Offset -> navigateBack(center) }
@@ -286,7 +299,7 @@ fun PermissionItem(label: String, isEnabled: Boolean, isDarkMode: Boolean) {
 }
 
 @Composable
-fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThemeToggle: () -> Unit, onNavigateToActivity: (Offset) -> Unit, onNavigateToSettings: (Offset) -> Unit, onNavigateToGoals: (Offset) -> Unit) {
+fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThemeToggle: () -> Unit, onNavigateToActivity: (Offset) -> Unit, onNavigateToSettings: (Offset) -> Unit, onNavigateToGoals: (Offset) -> Unit, onNavigateToHistory: (Offset) -> Unit) {
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
     val pullRefreshState = rememberPullToRefreshState()
@@ -389,14 +402,13 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Gray900)
                 .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.horizontalGradient(listOf(Gray800, Gray900)))
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF1F2937), Color(0xFF111827))))
                     .padding(horizontal = 24.dp, vertical = 32.dp)
             ) {
                 Row(
@@ -408,7 +420,7 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                         Text("Dashboard", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                         Text(SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()), color = Gray400, fontSize = 14.sp)
                     }
-                    IconButton(onClick = { onNavigateToSettings(Offset.Zero) }, modifier = Modifier.size(40.dp).clip(CircleShape).background(Gray800)) {
+                    IconButton(onClick = { onNavigateToSettings(Offset.Zero) }, modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF1F2937).copy(alpha = 0.5f))) {
                         Icon(Icons.Default.Settings, null, tint = Gray300, modifier = Modifier.size(20.dp))
                     }
                 }
@@ -419,8 +431,8 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Gray800.copy(alpha = 0.5f))
-                        .border(1.dp, Gray700, RoundedCornerShape(20.dp))
+                        .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+                        .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
                         .padding(16.dp)
                 ) {
                     Row(
@@ -537,7 +549,7 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
         }
         
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            BottomNavigationBar(onNavigateToActivity, onNavigateToGoals, { onNavigateToSettings(Offset.Zero) }, { /* History action here */ })
+            BottomNavigationBar(onNavigateToActivity, onNavigateToGoals, { onNavigateToSettings(Offset.Zero) }, { onNavigateToHistory(Offset.Zero) })
         }
     }
 }
@@ -547,8 +559,8 @@ fun QuickStatCard(title: String, value: String, subtitle: String, modifier: Modi
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .background(Gray800.copy(alpha = 0.5f))
-            .border(1.dp, Gray700, RoundedCornerShape(16.dp))
+            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+            .border(1.dp, Color(0xFF374151), RoundedCornerShape(16.dp))
             .padding(16.dp)
     ) {
         Column {
@@ -560,7 +572,7 @@ fun QuickStatCard(title: String, value: String, subtitle: String, modifier: Modi
 }
 
 @Composable
-fun BottomNavigationBar(onStats: (Offset) -> Unit, onGoals: (Offset) -> Unit, onSettings: () -> Unit, onHistory: () -> Unit) {
+fun BottomNavigationBar(onStats: (Offset) -> Unit, onGoals: (Offset) -> Unit, onSettings: () -> Unit, onHistory: (Offset) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -584,10 +596,12 @@ fun BottomNavigationBar(onStats: (Offset) -> Unit, onGoals: (Offset) -> Unit, on
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
                 BottomNavItem("Home", Icons.Default.Home, true) {}
-                BottomNavItem("Activity", Icons.Default.BarChart, false) { onStats(Offset.Zero) }
+                var activityCenter by remember { mutableStateOf(Offset.Zero) }
+                BottomNavItem("Activity", Icons.Default.BarChart, false, modifier = Modifier.onGloballyPositioned { activityCenter = it.positionInWindow() + Offset(it.size.width.toFloat() / 2f, it.size.height.toFloat() / 2f) }) { onStats(activityCenter) }
                 var goalsCenter by remember { mutableStateOf(Offset.Zero) }
                 BottomNavItem("Goals", Icons.Default.EmojiEvents, false, modifier = Modifier.onGloballyPositioned { goalsCenter = it.positionInWindow() + Offset(it.size.width.toFloat() / 2f, it.size.height.toFloat() / 2f) }) { onGoals(goalsCenter) }
-                BottomNavItem("History", Icons.Default.CalendarToday, false) { onHistory() }
+                var historyCenter by remember { mutableStateOf(Offset.Zero) }
+                BottomNavItem("History", Icons.Default.CalendarToday, false, modifier = Modifier.onGloballyPositioned { historyCenter = it.positionInWindow() + Offset(it.size.width.toFloat() / 2f, it.size.height.toFloat() / 2f) }) { onHistory(historyCenter) }
             }
         }
     }
@@ -657,7 +671,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
             )
         },
-        containerColor = Gray900
+        containerColor = Color.Transparent
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
             // View Switcher (Habits vs Todos)
@@ -716,7 +730,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                         Text(countText, color = progressColor.copy(alpha = 0.8f), fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(16.dp))
                         // Progress Bar
-                        Box(modifier = Modifier.width(180.dp).height(8.dp).clip(CircleShape).background(Gray800)) {
+                        Box(modifier = Modifier.width(180.dp).height(8.dp).clip(CircleShape).background(Color(0xFF1F2937).copy(alpha = 0.5f))) {
                             Box(modifier = Modifier.fillMaxWidth(currentProgress).fillMaxHeight().background(progressColor))
                         }
                     }
@@ -823,7 +837,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                         .weight(1f)
                         .height(56.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Gray800),
+                        .background(Color(0xFF1F2937).copy(alpha = 0.5f)),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
@@ -892,8 +906,8 @@ fun GoalItemRow(text: String, isCompleted: Boolean, color: Color, onToggle: () -
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Gray800.copy(alpha = 0.5f))
-            .border(1.dp, if (isCompleted) color.copy(alpha = 0.5f) else Gray700, RoundedCornerShape(16.dp))
+            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+            .border(1.dp, if (isCompleted) color.copy(alpha = 0.5f) else Color(0xFF374151), RoundedCornerShape(16.dp))
             .clickable { onToggle() }
             .padding(16.dp)
     ) {
@@ -928,10 +942,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var igLimit by remember { mutableStateOf("100") }
-    var ytLimit by remember { mutableStateOf("100") }
-    var igGap by remember { mutableStateOf("10") }
-    var ytGap by remember { mutableStateOf("10") }
+    var igLimit by remember { mutableStateOf("50") }
+    var ytLimit by remember { mutableStateOf("30") }
     var trackIG by remember { mutableStateOf(true) }
     var trackYT by remember { mutableStateOf(true) }
 
@@ -940,28 +952,24 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
     val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
     LaunchedEffect(Unit) {
-        igLimit = db.scrollDao().getSetting("limit_ig") ?: "100"
-        ytLimit = db.scrollDao().getSetting("limit_yt") ?: "100"
-        igGap = db.scrollDao().getSetting("alert_gap_ig") ?: "10"
-        ytGap = db.scrollDao().getSetting("alert_gap_yt") ?: "10"
+        igLimit = db.scrollDao().getSetting("alert_gap_ig") ?: "50"
+        ytLimit = db.scrollDao().getSetting("alert_gap_yt") ?: "30"
         trackIG = db.scrollDao().getSetting("track_ig")?.toBoolean() ?: true
         trackYT = db.scrollDao().getSetting("track_yt")?.toBoolean() ?: true
     }
-
-    val textColor = if (isDarkMode) Color.White else Color.Black
 
     if (showResetIGDialog) {
         AlertDialog(
             onDismissRequest = { showResetIGDialog = false },
             containerColor = Gray800,
-            title = { Text("Reset Instagram Count", color = textColor, fontWeight = FontWeight.Bold) },
-            text = { Text("This will reset the reels scrolled count to 0 for the day.", color = if (isDarkMode) Color.LightGray else Color.DarkGray) },
+            title = { Text("Reset Instagram Count", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("Reset Instagram scroll count for today?", color = Color.LightGray) },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
                         db.scrollDao().resetCount(todayStr, "Instagram")
                         db.scrollDao().deleteEventsForToday(todayStr, "Instagram")
-                        Toast.makeText(context, "Instagram count reset", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Instagram scroll count reset!", Toast.LENGTH_SHORT).show()
                     }
                     showResetIGDialog = false
                 }) { Text("Reset", color = Color.Red, fontWeight = FontWeight.Bold) }
@@ -977,14 +985,14 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
         AlertDialog(
             onDismissRequest = { showResetYTDialog = false },
             containerColor = Gray800,
-            title = { Text("Reset YouTube Count", color = textColor, fontWeight = FontWeight.Bold) },
-            text = { Text("This will reset the shorts scrolled count to 0 for the day.", color = if (isDarkMode) Color.LightGray else Color.DarkGray) },
+            title = { Text("Reset YouTube Count", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("Reset YouTube scroll count for today?", color = Color.LightGray) },
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
                         db.scrollDao().resetCount(todayStr, "YouTube")
                         db.scrollDao().deleteEventsForToday(todayStr, "YouTube")
-                        Toast.makeText(context, "YouTube count reset", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "YouTube scroll count reset!", Toast.LENGTH_SHORT).show()
                     }
                     showResetYTDialog = false
                 }) { Text("Reset", color = Color.Red, fontWeight = FontWeight.Bold) }
@@ -996,181 +1004,208 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
         )
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Settings", color = textColor, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Brush.verticalGradient(listOf(Color(0xFF0F172A), Color(0xFF1F2937), Color(0xFF0F172A))))) {
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())) {
+            
+            // Header
+            Box(modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.horizontalGradient(listOf(Color(0xFF1F2937), Color(0xFF111827))))
+                .statusBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 24.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     var backCenter by remember { mutableStateOf(Offset.Zero) }
-                    IconButton(onClick = { onBack(backCenter) }, modifier = Modifier.onGloballyPositioned { backCenter = it.positionInWindow() + Offset(it.size.width.toFloat() / 2f, it.size.height.toFloat() / 2f) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color(0xFF007AFF))
+                    IconButton(
+                        onClick = { 
+                            scope.launch {
+                                db.scrollDao().saveSetting(UserSetting("alert_gap_ig", igLimit))
+                                db.scrollDao().saveSetting(UserSetting("alert_gap_yt", ytLimit))
+                                db.scrollDao().saveSetting(UserSetting("track_ig", trackIG.toString()))
+                                db.scrollDao().saveSetting(UserSetting("track_yt", trackYT.toString()))
+                            }
+                            onBack(backCenter) 
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF1F2937).copy(alpha = 0.5f))
+                            .onGloballyPositioned {
+                                backCenter = it.positionInWindow() + Offset(it.size.width / 2f, it.size.height / 2f)
+                            }
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
                     }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
-            )
-        },
-        containerColor = Gray900
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(24.dp).fillMaxSize().verticalScroll(rememberScrollState())) {
-            SettingsCard("LIMITS", isDarkMode) {
-                OutlinedTextField(value = igLimit, onValueChange = { igLimit = it }, label = { Text("Instagram Limit (Reels)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(value = ytLimit, onValueChange = { ytLimit = it }, label = { Text("YouTube Limit (Shorts)") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            SettingsCard("ALERT GAPS", isDarkMode) {
-                Text("Show alert after every 'n' scrolls once limit is reached.", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
-                OutlinedTextField(value = igGap, onValueChange = { igGap = it }, label = { Text("Instagram Alert Every 'n' Reels") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(value = ytGap, onValueChange = { ytGap = it }, label = { Text("YouTube Alert Every 'n' Shorts") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            SettingsCard("TRACKING", isDarkMode) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Instagram", color = textColor, fontWeight = FontWeight.Medium)
-                    ScrollerToggle(checked = trackIG, isDarkMode = isDarkMode, onCheckedChange = { trackIG = it })
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("YouTube", color = textColor, fontWeight = FontWeight.Medium)
-                    ScrollerToggle(checked = trackYT, isDarkMode = isDarkMode, onCheckedChange = { trackYT = it })
+                    Text("Settings", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Column(modifier = Modifier.padding(24.dp)) {
+                // Alert Limits Section
+                SectionTitle("Alert Limits", Icons.Default.Notifications)
+                
+                // Instagram Alert Card
+                AlertLimitCardReplica(
+                    title = "Instagram",
+                    subtitle = "Alert frequency",
+                    icon = Icons.Default.PhotoCamera,
+                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
+                    borderColor = Color(0xFF9333EA).copy(alpha = 0.3f),
+                    value = igLimit,
+                    onValueChange = { igLimit = it },
+                    unit = "reels"
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
 
-            SettingsCard("RESET DATA", isDarkMode) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ClayPillButton(Modifier.weight(1f), "Reset IG", Icons.Default.PhotoCamera, Color(0xFFE1306C), isDarkMode) {
-                        showResetIGDialog = true
-                    }
-                    ClayPillButton(Modifier.weight(1f), "Reset YT", Icons.Default.PlayArrow, Color(0xFFFF0000), isDarkMode) {
-                        showResetYTDialog = true
-                    }
+                // YouTube Alert Card
+                AlertLimitCardReplica(
+                    title = "YouTube",
+                    subtitle = "Alert frequency",
+                    icon = Icons.Default.PlayArrow,
+                    gradient = SolidColor(Color(0xFFEF4444)),
+                    borderColor = Color(0xFFEF4444).copy(alpha = 0.3f),
+                    value = ytLimit,
+                    onValueChange = { ytLimit = it },
+                    unit = "shorts"
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Tracking Control Section
+                SectionTitle("Tracking Control", Icons.Default.Dns)
+
+                TrackingControlCardReplica(
+                    title = "Instagram Tracking",
+                    isTracking = trackIG,
+                    onToggle = { trackIG = !trackIG },
+                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
+                    icon = Icons.Default.PhotoCamera
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TrackingControlCardReplica(
+                    title = "YouTube Tracking",
+                    isTracking = trackYT,
+                    onToggle = { trackYT = !trackYT },
+                    gradient = SolidColor(Color(0xFFEF4444)),
+                    icon = Icons.Default.PlayArrow
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Reset Section
+                SectionTitle("Reset Today's Data", Icons.AutoMirrored.Filled.RotateLeft)
+
+                ResetDataCardReplica(
+                    title = "Reset Instagram",
+                    description = "Clear today's scroll count",
+                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
+                    icon = Icons.Default.PhotoCamera,
+                    onReset = { showResetIGDialog = true },
+                    accentColor = Color(0xFF9333EA)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ResetDataCardReplica(
+                    title = "Reset YouTube",
+                    description = "Clear today's scroll count",
+                    gradient = SolidColor(Color(0xFFEF4444)),
+                    icon = Icons.Default.PlayArrow,
+                    onReset = { showResetYTDialog = true },
+                    accentColor = Color(0xFFEF4444)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Info Box
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF3B82F6).copy(alpha = 0.1f))
+                        .border(1.dp, Color(0xFF3B82F6).copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Note: Reset only clears today's data. Historical data in Activity Analysis and History sections remains unchanged.",
+                        color = Color(0xFF93C5FD),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
                 }
+                
+                Spacer(modifier = Modifier.height(100.dp))
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
-            Button(
-                onClick = {
-                    scope.launch {
-                        db.scrollDao().saveSetting(UserSetting("limit_ig", igLimit))
-                        db.scrollDao().saveSetting(UserSetting("limit_yt", ytLimit))
-                        db.scrollDao().saveSetting(UserSetting("alert_gap_ig", igGap))
-                        db.scrollDao().saveSetting(UserSetting("alert_gap_yt", ytGap))
-                        db.scrollDao().saveSetting(UserSetting("track_ig", trackIG.toString()))
-                        db.scrollDao().saveSetting(UserSetting("track_yt", trackYT.toString()))
-                        Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF))
-            ) { Text("Save Changes", fontWeight = FontWeight.Bold, fontSize = 17.sp) }
         }
     }
 }
 
 @Composable
-fun SettingsCard(title: String, isDarkMode: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    // Match Home Screen Design: Solid Gray800 Borders and Background
+fun SectionTitle(title: String, icon: ImageVector? = null) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(bottom = 16.dp)
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = title.uppercase(),
+            color = Color.Gray,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+    }
+}
+
+@Composable
+fun AlertLimitCardReplica(title: String, subtitle: String, icon: ImageVector, gradient: Brush, borderColor: Color, value: String, onValueChange: (String) -> Unit, unit: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Gray800.copy(alpha = 0.5f))
-            .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .drawBehind { 
+                drawRoundRect(gradient, alpha = 0.1f, cornerRadius = CornerRadius(24.dp.toPx()))
+            }
+            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
             .padding(20.dp)
     ) {
         Column {
-            Text(title, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Spacer(modifier = Modifier.height(16.dp))
-            content()
-        }
-    }
-}
-
-@Composable
-fun ActivityScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onBack: (Offset) -> Unit) {
-    var selectedTab by remember { mutableStateOf("Day") }
-    var viewingDate by remember { mutableStateOf(Calendar.getInstance()) }
-    LaunchedEffect(refreshKey) { viewingDate = Calendar.getInstance() }
-
-    val igLimitState = db.scrollDao().getSettingFlow("limit_ig").collectAsState(initial = "100")
-    val ytLimitState = db.scrollDao().getSettingFlow("limit_yt").collectAsState(initial = "100")
-    val igLimit = igLimitState.value?.toIntOrNull() ?: 100
-    val ytLimit = ytLimitState.value?.toIntOrNull() ?: 100
-    val totalLimit = igLimit + ytLimit
-
-    val todayDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(viewingDate.time)
-    val eventsState = db.scrollDao().getEventsForDate(todayDateStr).collectAsState(initial = emptyList())
-    val historyRecordsState = db.scrollDao().getRecentRecords().collectAsState(initial = emptyList())
-    
-    val textColor = if (isDarkMode) Color.White else Color.Black
-
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Activity Analysis", color = textColor, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    var backCenter by remember { mutableStateOf(Offset.Zero) }
-                    IconButton(onClick = { onBack(backCenter) }, modifier = Modifier.onGloballyPositioned { backCenter = it.positionInWindow() + Offset(it.size.width.toFloat() / 2f, it.size.height.toFloat() / 2f) }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color(0xFF007AFF))
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
-            )
-        },
-        containerColor = Gray900
-    ) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
-            // Tab Switcher - Match Image: Transparent Outer, High-contrast Selected
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .padding(vertical = 4.dp), 
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                listOf("Day", "Week", "Month").forEach { tab ->
-                    val isSelected = selectedTab == tab
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .padding(horizontal = 4.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(if (isSelected) Color(0xFF2C333F) else Color.Transparent) // Solid, darker select state as per image
-                            .clickable { selectedTab = tab }, 
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = tab, 
-                            color = if (isSelected) Color.White else Color.Gray, 
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, 
-                            fontSize = 15.sp
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(subtitle, color = Color.Gray, fontSize = 12.sp)
+                }
+            }
+            
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF1F2937).copy(alpha = 0.5f)).padding(16.dp)) {
+                Column {
+                    Text("Alert after every", color = Color(0xFFD1D5DB), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        BasicTextField(
+                            value = value,
+                            onValueChange = onValueChange,
+                            textStyle = TextStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f).background(Color(0xFF111827).copy(alpha = 0.5f), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+                            cursorBrush = SolidColor(Color.White)
                         )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(unit, color = Color(0xFF9CA3AF), fontWeight = FontWeight.Medium)
                     }
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-            AnimatedContent(
-                targetState = selectedTab, 
-                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
-                label = ""
-            ) { tab ->
-                when (tab) {
-                    "Day" -> DayView(isDarkMode, viewingDate, eventsState.value, db)
-                    "Week" -> WeekView(isDarkMode, historyRecordsState.value, totalLimit)
-                    "Month" -> MonthView(isDarkMode, historyRecordsState.value, igLimit, ytLimit) { dateStr ->
-                        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse(dateStr)
-                        if (date != null) { viewingDate = Calendar.getInstance().apply { time = date }; selectedTab = "Day" }
-                    }
+                    Text("Alert screen will appear after scrolling $value $unit", color = Color(0xFF6B7280), fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         }
@@ -1178,354 +1213,75 @@ fun ActivityScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onBack
 }
 
 @Composable
-fun DayView(isDarkMode: Boolean, date: Calendar, events: List<ScrollEvent>, db: AppDatabase) {
-    val sessions = remember(events) {
-        val list = mutableListOf<List<ScrollEvent>>()
-        if (events.isEmpty()) return@remember list
-        var currentSession = mutableListOf<ScrollEvent>()
-        currentSession.add(events[0])
-        for (i in 1 until events.size) {
-            if (events[i].timestamp - events[i-1].timestamp < 5 * 60 * 1000) { currentSession.add(events[i]) }
-            else { list.add(currentSession); currentSession = mutableListOf(events[i]) }
-        }
-        list.add(currentSession); list.reverse(); list
-    }
-
-    Column {
-        // Activity Graph Panel - Match Home Screen Design
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(Gray800.copy(alpha = 0.5f))
-                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
-                .padding(16.dp)
-        ) {
-            ActivityGraph(events, db, isDarkMode)
-        }
-        Spacer(modifier = Modifier.height(28.dp))
-        Text("SESSIONS", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, modifier = Modifier.padding(start = 4.dp))
-        Spacer(modifier = Modifier.height(16.dp))
-        if (sessions.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text("No activity recorded for today", color = Color.Gray, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            }
-        } else {
-            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(sessions) { session ->
-                    SessionItem(session, isDarkMode)
-                }
-                item { Spacer(modifier = Modifier.height(20.dp)) }
-            }
-        }
-    }
-}
-
-@Composable
-fun WeekView(isDarkMode: Boolean, history: List<ScrollRecord>, limit: Int) {
-    val cal = Calendar.getInstance(); cal.set(Calendar.DAY_OF_WEEK, cal.firstDayOfWeek)
-    val weekDays = mutableListOf<String>()
-    val dayNames = mutableListOf<String>()
-    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val daySdf = SimpleDateFormat("E", Locale.getDefault())
-    for (i in 0 until 7) { 
-        weekDays.add(sdf.format(cal.time))
-        dayNames.add(daySdf.format(cal.time).first().toString())
-        cal.add(Calendar.DAY_OF_YEAR, 1) 
-    }
-    
-    val weekData = weekDays.map { date ->
-        val yt = history.find { it.date == date && it.appType == "YouTube" }?.scrollCount ?: 0
-        val ig = history.find { it.date == date && it.appType == "Instagram" }?.scrollCount ?: 0
-        Pair(yt, ig)
-    }
-
-    Column {
-        // Activity Graph Panel - Match Home Screen Design
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(Gray800.copy(alpha = 0.5f))
-                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
-                .padding(16.dp)
-        ) {
-            val textMeasurer = rememberTextMeasurer()
-            Canvas(modifier = Modifier.fillMaxWidth().height(300.dp)) {
-                val width = size.width
-                val labelAreaWidth = 40.dp.toPx()
-                val height = size.height - 30.dp.toPx()
-                val chartWidth = width - labelAreaWidth
-                val barAreaWidth = chartWidth / 7
-                val barWidth = 10.dp.toPx()
-                val maxVal = (weekData.flatMap { listOf(it.first, it.second) }.maxOrNull() ?: limit).coerceAtLeast(limit + 20).toFloat()
-                
-                for (i in 0..4) {
-                    val value = (maxVal / 4 * i).toInt()
-                    val y = height - (value / maxVal * height)
-                    drawLine(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f), Offset(labelAreaWidth, y), Offset(width, y))
-                    drawText(textMeasurer, value.toString(), Offset(0f, y - 8.dp.toPx()), style = TextStyle(color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-                }
-                
-                weekData.forEachIndexed { i, data ->
-                    val xCenter = labelAreaWidth + i * barAreaWidth + barAreaWidth/2
-                    drawText(textMeasurer, dayNames[i], Offset(xCenter - 4.dp.toPx(), height + 10.dp.toPx()), style = TextStyle(color = if (isDarkMode) Color.White.copy(alpha = 0.6f) else Color.Black.copy(alpha = 0.6f), fontSize = 11.sp, fontWeight = FontWeight.Black))
-                    
-                    if (data.second > 0) {
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(InstaNeonGradient), 
-                            topLeft = Offset(xCenter - barWidth - 3.dp.toPx(), height - (data.second / maxVal * height)), 
-                            size = Size(barWidth, data.second / maxVal * height), 
-                            cornerRadius = CornerRadius(4.dp.toPx())
-                        )
-                    }
-                    if (data.first > 0) {
-                        drawRoundRect(
-                            brush = Brush.verticalGradient(YTNeonGradient), 
-                            topLeft = Offset(xCenter + 3.dp.toPx(), height - (data.first / maxVal * height)), 
-                            size = Size(barWidth, data.first / maxVal * height), 
-                            cornerRadius = CornerRadius(4.dp.toPx())
-                        )
-                    }
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            LegendItem(InstaNeonGradient.first(), "Instagram")
-            Spacer(modifier = Modifier.width(24.dp))
-            LegendItem(YTNeonGradient.first(), "YouTube")
-        }
-    }
-}
-
-@Composable
-fun MonthView(isDarkMode: Boolean, history: List<ScrollRecord>, igLimit: Int, ytLimit: Int, onDayClick: (String) -> Unit) {
-    val cal = Calendar.getInstance(); cal.set(Calendar.DAY_OF_MONTH, 1)
-    val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
-    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    val monthDays = mutableListOf<String>()
-    val tempCal = cal.clone() as Calendar
-    for (i in 1..daysInMonth) { monthDays.add(sdf.format(tempCal.time)); tempCal.add(Calendar.DAY_OF_MONTH, 1) }
-    
-    val dailyData = monthDays.map { date ->
-        val yt = history.find { it.date == date && it.appType == "YouTube" }?.scrollCount ?: 0
-        val ig = history.find { it.date == date && it.appType == "Instagram" }?.scrollCount ?: 0
-        Triple(ig, yt, ig + yt)
-    }
-
-    val totalLimit = igLimit + ytLimit
-
-    Column {
-        // Activity Graph Panel - Match Home Screen Design
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(Gray800.copy(alpha = 0.5f))
-                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
-                .padding(16.dp)
-        ) {
-            val textMeasurer = rememberTextMeasurer()
-            Canvas(modifier = Modifier.fillMaxWidth().height(250.dp)) {
-                val width = size.width
-                val labelAreaWidth = 36.dp.toPx()
-                val height = size.height - 25.dp.toPx()
-                val chartWidth = width - labelAreaWidth
-                val barWidth = chartWidth / daysInMonth
-                val maxVal = (dailyData.map { it.third }.maxOrNull() ?: totalLimit).coerceAtLeast(totalLimit + 20).toFloat()
-                
-                for (i in 0..4) {
-                    val value = (maxVal / 4 * i).toInt()
-                    val y = height - (value / maxVal * height)
-                    drawLine(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f), Offset(labelAreaWidth, y), Offset(width, y))
-                    drawText(textMeasurer, value.toString(), Offset(0f, y - 8.dp.toPx()), style = TextStyle(color = Color.Gray, fontSize = 10.sp))
-                }
-                
-                for (i in 0 until daysInMonth) {
-                    val x = labelAreaWidth + i * barWidth
-                    val barHeight = dailyData[i].third / maxVal * height
-                    if (barHeight > 0) {
-                        drawRect(
-                            brush = Brush.verticalGradient(listOf(Color(0xFF007AFF), Color(0xFF007AFF).copy(alpha = 0.5f))), 
-                            topLeft = Offset(x + 1f, height - barHeight), 
-                            size = Size(barWidth - 2f, barHeight)
-                        )
-                    }
-                    if ((i + 1) % 5 == 0 || i == 0) {
-                        drawText(textMeasurer, "${i + 1}", Offset(x, height + 4.dp.toPx()), style = TextStyle(color = Color.Gray, fontSize = 9.sp))
-                    }
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.Center) {
-            LegendItem(Color(0xFF007AFF), "Daily Scrolls")
-        }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Text("CALENDAR VIEW", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
-        
-        // Calendar Grid Panel - Match Home Screen Design
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(Gray800.copy(alpha = 0.5f))
-                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
-                .padding(16.dp)
-        ) {
-            val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1
-            Column {
-                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceAround) {
-                    listOf("S", "M", "T", "W", "T", "F", "S").forEach { day ->
-                        Text(day, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Black)
-                    }
-                }
-                LazyVerticalGrid(columns = GridCells.Fixed(7), modifier = Modifier.height(220.dp)) {
-                    items(firstDayOfWeek) { Box(Modifier.size(32.dp)) }
-                    items(daysInMonth) { index ->
-                        val dateStr = monthDays[index]
-                        val igCount = dailyData[index].first
-                        val ytCount = dailyData[index].second
-                        val total = dailyData[index].third
-                        
-                        val bgColor = when {
-                            total == 0 -> Color.Transparent
-                            igCount > igLimit || ytCount > ytLimit -> Color(0xFFFF3B30).copy(alpha = 0.9f)
-                            else -> Color(0xFF34C759).copy(alpha = 0.9f)
-                        }
-                        
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.aspectRatio(1f).padding(3.dp).clip(CircleShape).background(bgColor).clickable { onDayClick(dateStr) }) {
-                            Text("${index + 1}", color = if (total > 0) Color.White else (if (isDarkMode) Color.White else Color.Black), fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                        }
-                    }
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.Center) {
-            LegendItem(Color(0xFF34C759), "Both Under Limit")
-            Spacer(modifier = Modifier.width(20.dp))
-            LegendItem(Color(0xFFFF3B30), "One or More Exceeded")
-        }
-    }
-}
-
-@Composable
-fun ActivityGraph(events: List<ScrollEvent>, db: AppDatabase, isDarkMode: Boolean) {
-    val ytBuckets = IntArray(24); val igBuckets = IntArray(24)
-    events.forEach { event ->
-        val hour = Calendar.getInstance().apply { timeInMillis = event.timestamp }.get(Calendar.HOUR_OF_DAY)
-        if (event.appType == "YouTube") ytBuckets[hour]++ else igBuckets[hour]++
-    }
-    val textMeasurer = rememberTextMeasurer()
-    val maxVal = (ytBuckets.maxOrNull() ?: 1).coerceAtLeast(igBuckets.maxOrNull() ?: 1).coerceAtLeast(20).toFloat()
-    
-    Canvas(modifier = Modifier.fillMaxWidth().height(220.dp)) {
-        val width = size.width
-        val labelAreaWidth = 36.dp.toPx()
-        val height = size.height - 25.dp.toPx()
-        val chartWidth = width - labelAreaWidth
-        val bucketWidth = chartWidth / 24
-        val barWidth = bucketWidth / 2.5f
-        
-        for (i in 0..4) {
-            val value = (i * (maxVal / 4)).toInt()
-            val y = height - (i * (maxVal / 4) / maxVal * height)
-            drawLine(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f), Offset(labelAreaWidth, y), Offset(width, y))
-            drawText(textMeasurer, value.toString(), Offset(0f, y - 8.dp.toPx()), style = TextStyle(color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-        }
-        
-        val hoursToLabel = listOf(0, 6, 12, 18, 23)
-        hoursToLabel.forEach { hour ->
-            val xBase = labelAreaWidth + hour * bucketWidth
-            drawText(textMeasurer, "${hour}h", Offset(xBase, height + 6.dp.toPx()), style = TextStyle(color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold))
-        }
-
-        for (i in 0 until 24) {
-            val xBase = labelAreaWidth + i * bucketWidth
-            if (ytBuckets[i] > 0) {
-                drawRoundRect(
-                    brush = Brush.verticalGradient(YTNeonGradient), 
-                    topLeft = Offset(xBase + 2f, height - (ytBuckets[i] / maxVal * height)), 
-                    size = Size(barWidth, ytBuckets[i] / maxVal * height), 
-                    cornerRadius = CornerRadius(2.dp.toPx())
-                )
-            }
-            if (igBuckets[i] > 0) {
-                drawRoundRect(
-                    brush = Brush.verticalGradient(InstaNeonGradient), 
-                    topLeft = Offset(xBase + barWidth + 4f, height - (igBuckets[i] / maxVal * height)), 
-                    size = Size(barWidth, igBuckets[i] / maxVal * height), 
-                    cornerRadius = CornerRadius(2.dp.toPx())
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SessionItem(session: List<ScrollEvent>, isDarkMode: Boolean) {
-    val ytCount = session.count { it.appType == "YouTube" }; val igCount = session.count { it.appType == "Instagram" }
-    val startTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(session[0].timestamp))
-    val endTime = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(session.last().timestamp))
-    
-    val durationMillis = session.last().timestamp - session[0].timestamp
-    val durationText = if (durationMillis > 60000) {
-        val mins = durationMillis / 60000
-        "${mins}m"
-    } else {
-        "${durationMillis / 1000}s"
-    }
-
-    // Session Item Panel - Match Home Screen Design
+fun TrackingControlCardReplica(title: String, isTracking: Boolean, onToggle: () -> Unit, gradient: Brush, icon: ImageVector) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Gray800.copy(alpha = 0.5f))
-            .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
             .padding(16.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            val textColor = if (isDarkMode) Color.White else Color.Black
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Schedule, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (startTime == endTime) startTime else "$startTime - $endTime", color = textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
-                Text("${igCount + ytCount} scrolls • $durationText duration", color = Color.Gray, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(if (isTracking) "Currently tracking" else "Paused", color = Color(0xFF9CA3AF), fontSize = 12.sp)
+                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (igCount > 0) SessionTag(Color(0xFFE1306C), "$igCount IG")
-                if (ytCount > 0) SessionTag(Color(0xFFFF3B30), "$ytCount YT")
+            
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(32.dp)
+                    .clip(CircleShape)
+                    .background(if (isTracking) gradient else SolidColor(Color(0xFF374151)))
+                    .clickable { onToggle() }
+                    .padding(4.dp),
+                contentAlignment = if (isTracking) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(if (isTracking) Color.White else Color(0xFF9CA3AF)).shadow(elevation = 4.dp, shape = CircleShape))
             }
         }
     }
 }
 
 @Composable
-fun SessionTag(color: Color, text: String) {
-    Box(modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-        Text(text, color = color, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+fun ResetDataCardReplica(title: String, description: String, gradient: Brush, icon: ImageVector, onReset: () -> Unit, accentColor: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
+            .padding(16.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(description, color = Color(0xFF9CA3AF), fontSize = 12.sp)
+                }
+            }
+            
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(accentColor.copy(alpha = 0.2f))
+                    .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .clickable { onReset() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Reset", color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
     }
-}
-
-fun formatTotalTime(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    return "${hours}h ${minutes}m"
-}
-
-fun formatMillisToTime(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    if (hours > 0) return "${hours}h ${minutes}m"
-    return "${minutes}m"
 }
