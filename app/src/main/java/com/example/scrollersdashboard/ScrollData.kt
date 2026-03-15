@@ -70,7 +70,7 @@ interface ScrollDao {
     @Query("SELECT * FROM scroll_data WHERE date = :date")
     fun getRecordsForDate(date: String): Flow<List<ScrollRecord>>
 
-    @Query("SELECT * FROM scroll_data ORDER BY date DESC LIMIT 60")
+    @Query("SELECT * FROM scroll_data ORDER BY date DESC LIMIT 180")
     fun getRecentRecords(): Flow<List<ScrollRecord>>
 
     @Query("DELETE FROM scroll_data")
@@ -81,6 +81,9 @@ interface ScrollDao {
 
     @Query("SELECT * FROM scroll_events WHERE date = :date ORDER BY timestamp ASC")
     fun getEventsForDate(date: String): Flow<List<ScrollEvent>>
+
+    @Query("SELECT * FROM scroll_events WHERE timestamp >= :startTime AND timestamp <= :endTime ORDER BY timestamp ASC")
+    fun getEventsInRange(startTime: Long, endTime: Long): Flow<List<ScrollEvent>>
 
     @Query("DELETE FROM scroll_events WHERE date = :date AND appType = :appType")
     suspend fun deleteEventsForToday(date: String, appType: String)

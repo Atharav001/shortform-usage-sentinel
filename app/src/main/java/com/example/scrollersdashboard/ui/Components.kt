@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -642,6 +644,32 @@ fun NeumorphicDivider(isDarkMode: Boolean, modifier: Modifier = Modifier) {
             .height(1.dp)
             .background(if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
     )
+}
+
+@Composable
+fun PermissionItem(title: String, isGranted: Boolean, isDarkMode: Boolean) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .liquidGlassCard(isDarkMode, cornerRadius = 16.dp, elevation = 1.dp)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (isDarkMode) Color.White else Color.Black,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Icon(
+            imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+            contentDescription = if (isGranted) "Granted" else "Not Granted",
+            tint = if (isGranted) Color(0xFF34C759) else Gray500,
+            modifier = Modifier.size(24.dp)
+        )
+    }
 }
 
 // Compatibility helpers

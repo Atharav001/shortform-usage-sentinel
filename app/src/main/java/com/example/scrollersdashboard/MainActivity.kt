@@ -3,16 +3,17 @@
 package com.example.scrollersdashboard
 
 import android.app.AppOpsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.Process
 import android.provider.Settings
-import android.text.TextUtils
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -41,13 +42,11 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -57,6 +56,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.*
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
@@ -102,7 +102,7 @@ class MainActivity : FragmentActivity() {
             val navigateBack = { center: Offset ->
                 rippleCenter = center
                 scope.launch {
-                    revealAnim.animateTo(0f, tween(600, easing = FastOutSlowInEasing))
+                    revealAnim.animateTo(0f, tween(300, easing = FastOutSlowInEasing))
                     currentScreen = "dashboard"
                 }
             }
@@ -168,7 +168,7 @@ class MainActivity : FragmentActivity() {
                                 scope.launch {
                                     overlayScreen = "activity"
                                     revealAnim.snapTo(0f)
-                                    revealAnim.animateTo(1f, tween(800, easing = FastOutSlowInEasing))
+                                    revealAnim.animateTo(1f, tween(400, easing = FastOutSlowInEasing))
                                     currentScreen = "activity"
                                 }
                             }
@@ -178,8 +178,17 @@ class MainActivity : FragmentActivity() {
                             scope.launch {
                                 overlayScreen = "settings"
                                 revealAnim.snapTo(0f)
-                                revealAnim.animateTo(1f, tween(800, easing = FastOutSlowInEasing))
+                                revealAnim.animateTo(1f, tween(400, easing = FastOutSlowInEasing))
                                 currentScreen = "settings"
+                            }
+                        },
+                        onNavigateToGoals = { center: Offset ->
+                            rippleCenter = center
+                            scope.launch {
+                                overlayScreen = "goals"
+                                revealAnim.snapTo(0f)
+                                revealAnim.animateTo(1f, tween(400, easing = FastOutSlowInEasing))
+                                currentScreen = "goals"
                             }
                         }
                     )
@@ -204,6 +213,11 @@ class MainActivity : FragmentActivity() {
                                     isDarkMode = isDarkMode,
                                     onBack = { center: Offset -> navigateBack(center) }
                                 )
+                                "goals" -> GoalsScreen(
+                                    db = db,
+                                    isDarkMode = isDarkMode,
+                                    onBack = { center: Offset -> navigateBack(center) }
+                                )
                             }
                         }
                     }
@@ -213,27 +227,48 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun authenticateBiometric(activity: FragmentActivity, onResult: () -> Unit) {
-        val executor = ContextCompat.getMainExecutor(activity)
-        val biometricPrompt = BiometricPrompt(activity, executor,
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    super.onAuthenticationSucceeded(result)
-                    onResult()
-                }
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    super.onAuthenticationError(errorCode, errString)
-                    Toast.makeText(activity, "Authentication failed", Toast.LENGTH_SHORT).show()
-                }
-            })
+        val biometricManager = BiometricManager.from(activity)
+        val authenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK or 
+                             BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        
+        if (biometricManager.canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS) {
+            val executor = ContextCompat.getMainExecutor(activity)
+            val biometricPrompt = BiometricPrompt(activity, executor,
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        onResult()
+                    }
 
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Identity Verification")
-            .setSubtitle("Authenticate to view detailed analysis")
-            .setNegativeButtonText("Cancel")
-            .build()
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        Toast.makeText(activity, "Authentication failed", Toast.LENGTH_SHORT).show()
+                    }
+                })
 
-        biometricPrompt.authenticate(promptInfo)
+            val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Identity Verification")
+                .setSubtitle("Authenticate to view detailed analysis")
+                .setNegativeButtonText("Cancel")
+                .build()
+
+            biometricPrompt.authenticate(promptInfo)
+        } else {
+            onResult()
+        }
     }
+}
+
+fun isAccessibilityServiceEnabled(context: Context, service: Class<*>): Boolean {
+    val expectedId = ComponentName(context, service).flattenToString()
+    val enabledServices = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+    return enabledServices?.split(':')?.any { it.equals(expectedId, ignoreCase = true) } == true
+}
+
+fun isUsageAccessEnabled(context: Context): Boolean {
+    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    val mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
+    return mode == AppOpsManager.MODE_ALLOWED
 }
 
 @Composable
@@ -251,7 +286,7 @@ fun PermissionItem(label: String, isEnabled: Boolean, isDarkMode: Boolean) {
 }
 
 @Composable
-fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThemeToggle: () -> Unit, onNavigateToActivity: (Offset) -> Unit, onNavigateToSettings: (Offset) -> Unit) {
+fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThemeToggle: () -> Unit, onNavigateToActivity: (Offset) -> Unit, onNavigateToSettings: (Offset) -> Unit, onNavigateToGoals: (Offset) -> Unit) {
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
     val pullRefreshState = rememberPullToRefreshState()
@@ -282,11 +317,9 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
     
     val totalTimeStr = formatTotalTime(instagramTime + youtubeTime)
     
-    // Improvement Logic: Compare today's combined screen time with last 3 days average
     val todayTime = instagramTime + youtubeTime
     val last3DaysAvgTime = remember(scrollRecords) {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val cal = Calendar.getInstance()
         var total = 0L
         var count = 0
         for (i in 1..3) {
@@ -306,7 +339,6 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
         ((todayTime - last3DaysAvgTime).toFloat() / last3DaysAvgTime * 100).toInt()
     } else 0
 
-    // Streak Logic - Fixed infinite loop by using a bounded for-loop
     val streakCount = remember(scrollRecords, igLimit, ytLimit) {
         if (scrollRecords.isEmpty()) return@remember 0
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -319,7 +351,6 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
             val dayRecords = recordsByDate[dStr]
             
             if (dayRecords == null) {
-                // If it's today and no usage yet, we continue streak
                 if (dStr == todayStr) {
                     streak++
                     streakCal.add(Calendar.DAY_OF_YEAR, -1)
@@ -362,7 +393,6 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                 .statusBarsPadding()
                 .verticalScroll(rememberScrollState())
         ) {
-            // Header Section
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -378,14 +408,13 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                         Text("Dashboard", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                         Text(SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(Date()), color = Gray400, fontSize = 14.sp)
                     }
-                    IconButton(onClick = {}, modifier = Modifier.size(40.dp).clip(CircleShape).background(Gray800)) {
-                        Icon(Icons.Default.CalendarToday, null, tint = Gray300, modifier = Modifier.size(20.dp))
+                    IconButton(onClick = { onNavigateToSettings(Offset.Zero) }, modifier = Modifier.size(40.dp).clip(CircleShape).background(Gray800)) {
+                        Icon(Icons.Default.Settings, null, tint = Gray300, modifier = Modifier.size(20.dp))
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Daily Summary Card
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -424,7 +453,6 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                 }
             }
 
-            // Main Content
             Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)) {
                 Text("App Usage", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(24.dp))
@@ -454,7 +482,6 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Quick Stats
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     val totalScrolls = instagramCount + youtubeCount
                     val combinedTimeHours = (instagramTime + youtubeTime).toFloat() / (1000 * 60 * 60)
@@ -466,7 +493,6 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
 
                 Spacer(modifier = Modifier.height(32.dp))
 
-                // Achievement Badge
                 if (streakCount >= 2) {
                     Box(
                         modifier = Modifier
@@ -490,13 +516,12 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                     Spacer(modifier = Modifier.height(32.dp))
                 }
 
-                // View Detailed Analysis Button - Plain mid-blue colored button
                 PremiumScalingButton(onClick = onNavigateToActivity, modifier = Modifier.fillMaxWidth(), isDarkMode = true, cornerRadius = 16.dp) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(60.dp)
-                            .background(Blue600.copy(alpha = 0.8f)), // Mid-blue blending with background
+                            .background(Blue600.copy(alpha = 0.8f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -507,13 +532,12 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(100.dp)) // Bottom padding for navigation
+                Spacer(modifier = Modifier.height(100.dp))
             }
         }
         
-        // Bottom Navigation Overlay
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            BottomNavigationBar(onNavigateToActivity, { onNavigateToSettings(Offset.Zero) }, { /* Goals */ }, { /* History */ })
+            BottomNavigationBar(onNavigateToActivity, onNavigateToGoals, { onNavigateToSettings(Offset.Zero) }, { /* History action here */ })
         }
     }
 }
@@ -536,31 +560,269 @@ fun QuickStatCard(title: String, value: String, subtitle: String, modifier: Modi
 }
 
 @Composable
-fun BottomNavigationBar(onStats: (Offset) -> Unit, onSettings: () -> Unit, onGoals: () -> Unit, onHistory: () -> Unit) {
+fun BottomNavigationBar(onStats: (Offset) -> Unit, onGoals: (Offset) -> Unit, onSettings: () -> Unit, onHistory: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Gray900.copy(alpha = 0.95f))
-            .border(width = 1.dp, color = Gray800, shape = RectangleShape)
-            .padding(vertical = 12.dp)
+            .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+            .background(Brush.verticalGradient(listOf(Color(0xFF1A1F2B), Color(0xFF0D1117))))
+            .border(width = 1.dp, color = Color.White.copy(alpha = 0.05f), shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
+            .padding(bottom = 24.dp, top = 8.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-            BottomNavItem("Home", Icons.Default.Home, true) {}
-            BottomNavItem("Stats", Icons.AutoMirrored.Filled.TrendingDown, false) { onStats(Offset.Zero) }
-            BottomNavItem("Goals", Icons.Default.EmojiEvents, false) { onGoals() }
-            BottomNavItem("History", Icons.Default.CalendarToday, false) { onHistory() }
+        Column {
+            // Blue indicator at the top
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .padding(horizontal = 48.dp)
+                    .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
+                    .background(Color(0xFF007AFF).copy(alpha = 0.8f))
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
+                BottomNavItem("Home", Icons.Default.Home, true) {}
+                BottomNavItem("Activity", Icons.Default.BarChart, false) { onStats(Offset.Zero) }
+                var goalsCenter by remember { mutableStateOf(Offset.Zero) }
+                BottomNavItem("Goals", Icons.Default.EmojiEvents, false, modifier = Modifier.onGloballyPositioned { goalsCenter = it.positionInWindow() + Offset(it.size.width.toFloat() / 2f, it.size.height.toFloat() / 2f) }) { onGoals(goalsCenter) }
+                BottomNavItem("History", Icons.Default.CalendarToday, false) { onHistory() }
+            }
         }
     }
 }
 
 @Composable
-fun BottomNavItem(label: String, icon: ImageVector, isSelected: Boolean, onClick: () -> Unit) {
+fun BottomNavItem(label: String, icon: ImageVector, isSelected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick).padding(8.dp)
+        modifier = modifier.clickable(onClick = onClick).padding(8.dp)
     ) {
-        Icon(icon, null, tint = if (isSelected) Blue500 else Gray500, modifier = Modifier.size(24.dp))
-        Text(label, color = if (isSelected) Blue500 else Gray500, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+        Icon(
+            imageVector = icon, 
+            contentDescription = null, 
+            tint = if (isSelected) Color.White else Color.Gray.copy(alpha = 0.6f), 
+            modifier = Modifier.size(26.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label, 
+            color = if (isSelected) Color.White else Color.Gray.copy(alpha = 0.6f), 
+            fontSize = 12.sp, 
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) {
+    var selectedView by remember { mutableStateOf("habits") }
+    val scope = rememberCoroutineScope()
+    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    
+    val habitTasks by db.scrollDao().getHabitTasks().collectAsState(initial = emptyList())
+    val todoTasks by db.scrollDao().getTodoTasks(today).collectAsState(initial = emptyList())
+
+    val habitsCompleted = habitTasks.count { it.lastCompletedDate == today }
+    val todosCompleted = todoTasks.count { it.isCompleted }
+    
+    val habitProgress = if (habitTasks.isNotEmpty()) (habitsCompleted.toFloat() / habitTasks.size) else 0f
+    val todoProgress = if (todoTasks.isNotEmpty()) (todosCompleted.toFloat() / todoTasks.size) else 0f
+
+    var showAddTaskDialog by remember { mutableStateOf(false) }
+    var newTaskText by remember { mutableStateOf("") }
+
+    val textColor = if (isDarkMode) Color.White else Color.Black
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Goals", color = textColor, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    var backCenter by remember { mutableStateOf(Offset.Zero) }
+                    IconButton(onClick = { onBack(backCenter) }, modifier = Modifier.onGloballyPositioned { backCenter = it.positionInWindow() + Offset(it.size.width.toFloat() / 2f, it.size.height.toFloat() / 2f) }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color(0xFF007AFF))
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
+            )
+        },
+        containerColor = Gray900,
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = { showAddTaskDialog = true },
+                containerColor = Color(0xFF007AFF),
+                contentColor = Color.White,
+                shape = CircleShape
+            ) { Icon(Icons.Default.Add, "Add Task") }
+        }
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
+            // View Switcher (Habits vs Todos)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(vertical = 4.dp), 
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf("Habits", "To-Do").forEach { tab ->
+                    val isSelected = selectedView.equals(tab, ignoreCase = true) || (selectedView == "todos" && tab == "To-Do")
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .padding(horizontal = 4.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (isSelected) Color(0xFF2C333F) else Color.Transparent)
+                            .clickable { selectedView = if (tab == "Habits") "habits" else "todos" }, 
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (tab == "Habits") Icons.Default.Repeat else Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = if (isSelected) Color.White else Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = tab, color = if (isSelected) Color.White else Color.Gray, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Progress Card
+            val currentProgress = if (selectedView == "habits") habitProgress else todoProgress
+            val countText = if (selectedView == "habits") "$habitsCompleted of ${habitTasks.size} habits" else "$todosCompleted of ${todoTasks.size} tasks"
+            val progressColor = if (selectedView == "habits") Color(0xFF34C759) else Color(0xFF007AFF)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(progressColor.copy(alpha = 0.15f))
+                    .border(1.dp, progressColor.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
+                    .padding(20.dp)
+            ) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text("Today's Progress", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(countText, color = progressColor.copy(alpha = 0.8f), fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        // Progress Bar
+                        Box(modifier = Modifier.width(180.dp).height(8.dp).clip(CircleShape).background(Gray800)) {
+                            Box(modifier = Modifier.fillMaxWidth(currentProgress).fillMaxHeight().background(progressColor))
+                        }
+                    }
+                    Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(Gray800), contentAlignment = Alignment.Center) {
+                        Text("${(currentProgress * 100).toInt()}%", color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Task List
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (selectedView == "habits") {
+                    items(habitTasks) { habit ->
+                        val isDone = habit.lastCompletedDate == today
+                        GoalItemRow(habit.title, isDone, color = Color(0xFF34C759), 
+                            onToggle = {
+                                scope.launch { db.scrollDao().insertHabit(habit.copy(lastCompletedDate = if (isDone) "" else today)) }
+                            }, 
+                            onDelete = {
+                                scope.launch { db.scrollDao().deleteHabit(habit.id) }
+                            }
+                        )
+                    }
+                } else {
+                    items(todoTasks) { todo ->
+                        GoalItemRow(todo.title, todo.isCompleted, color = Color(0xFF007AFF), 
+                            onToggle = {
+                                scope.launch { db.scrollDao().insertTodo(todo.copy(isCompleted = !todo.isCompleted)) }
+                            }, 
+                            onDelete = {
+                                scope.launch { db.scrollDao().deleteTodo(todo.id) }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showAddTaskDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddTaskDialog = false },
+            containerColor = Gray800,
+            title = { Text("Add New ${if (selectedView == "habits") "Habit" else "Task"}", color = Color.White) },
+            text = {
+                OutlinedTextField(
+                    value = newTaskText,
+                    onValueChange = { newTaskText = it },
+                    placeholder = { Text("Enter title...") },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (newTaskText.isNotBlank()) {
+                        scope.launch {
+                            if (selectedView == "habits") db.scrollDao().insertHabit(HabitTask(title = newTaskText))
+                            else db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = today))
+                            newTaskText = ""
+                            showAddTaskDialog = false
+                        }
+                    }
+                }) { Text("Add", color = Color(0xFF007AFF)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddTaskDialog = false }) { Text("Cancel", color = Color.Gray) }
+            }
+        )
+    }
+}
+
+@Composable
+fun GoalItemRow(text: String, isCompleted: Boolean, color: Color, onToggle: () -> Unit, onDelete: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Gray800.copy(alpha = 0.5f))
+            .border(1.dp, if (isCompleted) color.copy(alpha = 0.5f) else Gray700, RoundedCornerShape(16.dp))
+            .clickable { onToggle() }
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(if (isCompleted) color else Color.Transparent)
+                    .border(2.dp, if (isCompleted) color else Color.Gray, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isCompleted) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = text,
+                color = if (isCompleted) Color.Gray else Color.White,
+                modifier = Modifier.weight(1f),
+                textDecoration = if (isCompleted) TextDecoration.LineThrough else null,
+                fontWeight = FontWeight.Medium
+            )
+            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Default.Delete, null, tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
+            }
+        }
     }
 }
 
@@ -718,10 +980,20 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
 
 @Composable
 fun SettingsCard(title: String, isDarkMode: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().liquidGlassCard(isDarkMode).padding(20.dp)) {
-        Text(title, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Spacer(modifier = Modifier.height(16.dp))
-        content()
+    // Match Home Screen Design: Solid Gray800 Borders and Background
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Gray800.copy(alpha = 0.5f))
+            .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+            .padding(20.dp)
+    ) {
+        Column {
+            Text(title, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Spacer(modifier = Modifier.height(16.dp))
+            content()
+        }
     }
 }
 
@@ -759,14 +1031,33 @@ fun ActivityScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onBack
         containerColor = Gray900
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
-            // Tab Switcher
-            Row(modifier = Modifier.fillMaxWidth().liquidGlassCard(isDarkMode).padding(6.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            // Tab Switcher - Match Image: Transparent Outer, High-contrast Selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .padding(vertical = 4.dp), 
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 listOf("Day", "Week", "Month").forEach { tab ->
                     val isSelected = selectedTab == tab
-                    Box(modifier = Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(20.dp))
-                        .background(if (isSelected) (if (isDarkMode) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.08f)) else Color.Transparent)
-                        .clickable { selectedTab = tab }, contentAlignment = Alignment.Center) {
-                        Text(tab, color = if (isSelected) textColor else Color.Gray, fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold, fontSize = 14.sp)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .padding(horizontal = 4.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (isSelected) Color(0xFF2C333F) else Color.Transparent) // Solid, darker select state as per image
+                            .clickable { selectedTab = tab }, 
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = tab, 
+                            color = if (isSelected) Color.White else Color.Gray, 
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, 
+                            fontSize = 15.sp
+                        )
                     }
                 }
             }
@@ -804,7 +1095,15 @@ fun DayView(isDarkMode: Boolean, date: Calendar, events: List<ScrollEvent>, db: 
     }
 
     Column {
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+        // Activity Graph Panel - Match Home Screen Design
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(Gray800.copy(alpha = 0.5f))
+                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+                .padding(16.dp)
+        ) {
             ActivityGraph(events, db, isDarkMode)
         }
         Spacer(modifier = Modifier.height(28.dp))
@@ -845,14 +1144,23 @@ fun WeekView(isDarkMode: Boolean, history: List<ScrollRecord>, limit: Int) {
     }
 
     Column {
-        Box(modifier = Modifier.fillMaxWidth().height(300.dp).padding(horizontal = 4.dp)) {
+        // Activity Graph Panel - Match Home Screen Design
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(Gray800.copy(alpha = 0.5f))
+                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+                .padding(16.dp)
+        ) {
             val textMeasurer = rememberTextMeasurer()
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val width = size.width; 
+            Canvas(modifier = Modifier.fillMaxWidth().height(300.dp)) {
+                val width = size.width
                 val labelAreaWidth = 40.dp.toPx()
                 val height = size.height - 30.dp.toPx()
                 val chartWidth = width - labelAreaWidth
-                val barAreaWidth = chartWidth / 7; val barWidth = 10.dp.toPx()
+                val barAreaWidth = chartWidth / 7
+                val barWidth = 10.dp.toPx()
                 val maxVal = (weekData.flatMap { listOf(it.first, it.second) }.maxOrNull() ?: limit).coerceAtLeast(limit + 20).toFloat()
                 
                 for (i in 0..4) {
@@ -912,10 +1220,18 @@ fun MonthView(isDarkMode: Boolean, history: List<ScrollRecord>, igLimit: Int, yt
     val totalLimit = igLimit + ytLimit
 
     Column {
-        Box(modifier = Modifier.fillMaxWidth().height(250.dp).padding(horizontal = 4.dp)) {
+        // Activity Graph Panel - Match Home Screen Design
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(Gray800.copy(alpha = 0.5f))
+                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+                .padding(16.dp)
+        ) {
             val textMeasurer = rememberTextMeasurer()
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val width = size.width; 
+            Canvas(modifier = Modifier.fillMaxWidth().height(250.dp)) {
+                val width = size.width
                 val labelAreaWidth = 36.dp.toPx()
                 val height = size.height - 25.dp.toPx()
                 val chartWidth = width - labelAreaWidth
@@ -954,7 +1270,15 @@ fun MonthView(isDarkMode: Boolean, history: List<ScrollRecord>, igLimit: Int, yt
         Spacer(modifier = Modifier.height(24.dp))
         
         Text("CALENDAR VIEW", color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, modifier = Modifier.padding(start = 4.dp, bottom = 12.dp))
-        Box(modifier = Modifier.liquidGlassCard(isDarkMode).padding(16.dp)) {
+        
+        // Calendar Grid Panel - Match Home Screen Design
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(Gray800.copy(alpha = 0.5f))
+                .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+                .padding(16.dp)
+        ) {
             val firstDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) - 1
             Column {
                 Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceAround) {
@@ -1004,9 +1328,9 @@ fun ActivityGraph(events: List<ScrollEvent>, db: AppDatabase, isDarkMode: Boolea
     val maxVal = (ytBuckets.maxOrNull() ?: 1).coerceAtLeast(igBuckets.maxOrNull() ?: 1).coerceAtLeast(20).toFloat()
     
     Canvas(modifier = Modifier.fillMaxWidth().height(220.dp)) {
-        val width = size.width; 
+        val width = size.width
         val labelAreaWidth = 36.dp.toPx()
-        val height = size.height - 25.dp.toPx(); 
+        val height = size.height - 25.dp.toPx()
         val chartWidth = width - labelAreaWidth
         val bucketWidth = chartWidth / 24
         val barWidth = bucketWidth / 2.5f
@@ -1060,7 +1384,15 @@ fun SessionItem(session: List<ScrollEvent>, isDarkMode: Boolean) {
         "${durationMillis / 1000}s"
     }
 
-    Box(modifier = Modifier.fillMaxWidth().liquidGlassCard(isDarkMode).padding(16.dp)) {
+    // Session Item Panel - Match Home Screen Design
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Gray800.copy(alpha = 0.5f))
+            .border(1.dp, Gray800, RoundedCornerShape(20.dp))
+            .padding(16.dp)
+    ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             val textColor = if (isDarkMode) Color.White else Color.Black
             Column {
@@ -1099,24 +1431,4 @@ fun formatMillisToTime(millis: Long): String {
     val minutes = (totalSeconds % 3600) / 60
     if (hours > 0) return "${hours}h ${minutes}m"
     return "${minutes}m"
-}
-
-fun isAccessibilityServiceEnabled(context: Context, service: Class<out android.accessibilityservice.AccessibilityService>): Boolean {
-    val expectedId = android.content.ComponentName(context, service).flattenToString()
-    val enabledServices = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-    val colonSplitter = TextUtils.SimpleStringSplitter(':')
-    colonSplitter.setString(enabledServices)
-    while (colonSplitter.hasNext()) { if (colonSplitter.next().equals(expectedId, ignoreCase = true)) return true }
-    return false
-}
-
-fun isUsageAccessEnabled(context: Context): Boolean {
-    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-    val mode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-        appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
-    } else {
-        @Suppress("DEPRECATION")
-        appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName)
-    }
-    return mode == AppOpsManager.MODE_ALLOWED
 }

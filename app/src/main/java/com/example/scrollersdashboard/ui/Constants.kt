@@ -33,13 +33,13 @@ val ToggleTrackOn = Color(0xFF34C759)
 val ToggleTrackOff = Color(0xFF333333)
 
 @Composable
-fun Modifier.modernGlassy(): Modifier = this.then(
+fun Modifier.modernGlassy(isDarkMode: Boolean): Modifier = this.then(
     Modifier
-        .clip(MaterialTheme.shapes.extraLarge)
-        .background(MaterialTheme.colorScheme.surfaceContainer)
+        .clip(RoundedCornerShape(28.dp))
+        .background(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.03f))
         .border(
             1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-            MaterialTheme.shapes.extraLarge
+            if (isDarkMode) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
+            RoundedCornerShape(28.dp)
         )
 )
