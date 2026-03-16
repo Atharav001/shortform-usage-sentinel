@@ -11,10 +11,13 @@ import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ProgressBar
@@ -28,6 +31,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -126,7 +130,6 @@ class ScrollerAccessibilityService : AccessibilityService() {
             }
             serviceScope.launch { syncScreenTimeWithSystem() }
 
-            // Detect app opening or switching
             if (packageName != lastForegroundApp) {
                 lastForegroundApp = packageName
                 val appType = when {
@@ -154,6 +157,16 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (overlayView != null && event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_UP) {
+                removeOverlay()
+            }
+            return true 
+        }
+        return super.onKeyEvent(event)
     }
 
     private fun getScreenHeight(): Int {
@@ -251,16 +264,13 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 val lastAlerted = lastAlertedCount[appType] ?: 0
                 
                 if (alertOnlyAfterLimit) {
-                    // Strict Mode: Only alert after limit is reached
                     if (currentTotalCount >= limit) {
-                        // Alert once when limit is first exceeded, then every 'gap' scrolls
                         if (lastAlerted < limit || (currentTotalCount - lastAlerted) >= gap) {
                             lastAlertedCount[appType] = currentTotalCount
                             true
                         } else false
                     } else false
                 } else {
-                    // Non-Strict Mode (Strict Mode Paused): Alert ONLY based on interval/gap
                     if (currentTotalCount > 0 && (currentTotalCount - lastAlerted) >= gap) {
                         lastAlertedCount[appType] = currentTotalCount
                         true
@@ -290,42 +300,36 @@ class ScrollerAccessibilityService : AccessibilityService() {
             val limitValue = dao.getSetting(limitKey)
             val limit = limitValue?.toIntOrNull() ?: 100
             
-            // If user is over limit, OR if they want alerts based on interval only (Non-Strict)
             if (currentCount >= limit || !alertOnlyAfterLimit) {
                 synchronized(lastAlertedCount) {
                     if (lastAlertDate != today) {
                         lastAlertedCount.clear()
                         lastAlertDate = today
                     }
-                    // Sync the last alerted count with current count to start interval fresh
-                    // unless we are already tracking it in this service lifecycle
                     if (!lastAlertedCount.containsKey(appType)) {
                         lastAlertedCount[appType] = currentCount
                     }
                 }
-                Log.d(TAG, "Initialized alert tracker for $appType on app open. Current count: $currentCount")
             }
         }
     }
 
     private fun showLimitReachedOverlay(appType: String) {
         if (overlayView != null) return
-        Log.d(TAG, "showLimitReachedOverlay for $appType")
         
         try {
-            // Apply the theme using ContextThemeWrapper before inflation
             val contextWrapper = ContextThemeWrapper(this, R.style.Theme_ScrollersDashboard)
             
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or 
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or 
                 WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT
             ).apply { 
                 gravity = Gravity.CENTER
+                softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
                 }
@@ -416,13 +420,23 @@ class ScrollerAccessibilityService : AccessibilityService() {
             }
             
             launch {
-                dao.getTodoTasks(today).collect { tasks ->
-                    val completed = tasks.count { it.isCompleted }
-                    tvTasksCount.text = "$completed/${tasks.size}"
-                    pbTasks.progress = if (tasks.isNotEmpty()) (completed * 100 / tasks.size) else 0
-                    tasksAdapter.updateTasks(tasks)
+                dao.getSettingFlow("refresh_daily_todo").collectLatest { refreshDailyStr ->
+                    val isRefreshDaily = refreshDailyStr?.toBoolean() ?: true
+                    val todoDate = if (isRefreshDaily) today else "permanent_todo"
+                    
+                    dao.getTodoTasks(todoDate).collect { tasks ->
+                        val completed = tasks.count { it.isCompleted }
+                        tvTasksCount.text = "$completed/${tasks.size}"
+                        pbTasks.progress = if (tasks.isNotEmpty()) (completed * 100 / tasks.size) else 0
+                        tasksAdapter.updateTasks(tasks)
+                    }
                 }
             }
+        }
+
+        fun hideKeyboard(v: View) {
+            val imm = themedContext.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(v.windowToken, 0)
         }
 
         btnAddHabit.setOnClickListener {
@@ -430,19 +444,41 @@ class ScrollerAccessibilityService : AccessibilityService() {
             if (text.isNotBlank()) {
                 serviceScope.launch {
                     dao.insertHabit(HabitTask(title = text))
-                    withContext(Dispatchers.Main) { etHabit.text.clear() }
+                    withContext(Dispatchers.Main) { 
+                        etHabit.text.clear()
+                        hideKeyboard(etHabit)
+                    }
                 }
             }
+        }
+
+        etHabit.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                btnAddHabit.performClick()
+                true
+            } else false
         }
 
         btnAddTask.setOnClickListener {
             val text = etTask.text.toString()
             if (text.isNotBlank()) {
                 serviceScope.launch {
-                    dao.insertTodo(TodoTask(title = text, date = today))
-                    withContext(Dispatchers.Main) { etTask.text.clear() }
+                    val isRefreshDaily = dao.getSetting("refresh_daily_todo")?.toBoolean() ?: true
+                    val todoDate = if (isRefreshDaily) today else "permanent_todo"
+                    dao.insertTodo(TodoTask(title = text, date = todoDate))
+                    withContext(Dispatchers.Main) { 
+                        etTask.text.clear()
+                        hideKeyboard(etTask)
+                    }
                 }
             }
+        }
+
+        etTask.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                btnAddTask.performClick()
+                true
+            } else false
         }
 
         btnQuit.setOnClickListener {
