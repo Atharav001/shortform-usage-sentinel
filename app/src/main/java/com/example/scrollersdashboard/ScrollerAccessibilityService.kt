@@ -11,35 +11,35 @@ import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
-import androidx.compose.ui.platform.ComposeView
+import android.widget.EditText
+import android.widget.ImageButton
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.appcompat.view.ContextThemeWrapper
 import androidx.lifecycle.*
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.example.scrollersdashboard.ui.TodoHabitPanel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.util.*
 
 class ScrollerAccessibilityService : AccessibilityService() {
 
     private lateinit var db: AppDatabase
-    private val serviceScope = CoroutineScope(Dispatchers.IO)
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var overlayScope: CoroutineScope? = null
     private val TAG = "ScrollerService"
     
     private var overlayView: View? = null
     private lateinit var windowManager: WindowManager
-    private var currentLifecycleOwner: OverlayLifecycleOwner? = null
 
     private val pendingCounts = mutableMapOf<String, Int>()
     private var flushJob: Job? = null
@@ -47,6 +47,7 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
     private val lastAlertedCount = mutableMapOf<String, Int>()
     private var lastAlertDate: String? = null
+    private var lastForegroundApp: String? = null
 
     private val instagramTracker = InstagramTracker()
     private val youtubeTracker = YouTubeTracker()
@@ -78,25 +79,29 @@ class ScrollerAccessibilityService : AccessibilityService() {
     }
 
     private fun syncScreenTimeWithSystem() {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val calendar = Calendar.getInstance()
-        calendar.set(Calendar.HOUR_OF_DAY, 0)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-        calendar.set(Calendar.MILLISECOND, 0)
-        val startOfDay = calendar.timeInMillis
-        val endOfDay = System.currentTimeMillis()
+        try {
+            val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val calendar = Calendar.getInstance()
+            calendar.set(Calendar.HOUR_OF_DAY, 0)
+            calendar.set(Calendar.MINUTE, 0)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            val startOfDay = calendar.timeInMillis
+            val endOfDay = System.currentTimeMillis()
 
-        val stats = usageStatsManager.queryAndAggregateUsageStats(startOfDay, endOfDay)
-        
-        val igTime = stats["com.instagram.android"]?.totalTimeInForeground ?: 0L
-        val ytTime = stats["com.google.android.youtube"]?.totalTimeInForeground ?: 0L
+            val stats = usageStatsManager.queryAndAggregateUsageStats(startOfDay, endOfDay)
+            
+            val igTime = stats["com.instagram.android"]?.totalTimeInForeground ?: 0L
+            val ytTime = stats["com.google.android.youtube"]?.totalTimeInForeground ?: 0L
 
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-        
-        serviceScope.launch {
-            updateAppScreenTime(today, "Instagram", igTime)
-            updateAppScreenTime(today, "YouTube", ytTime)
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            
+            serviceScope.launch {
+                updateAppScreenTime(today, "Instagram", igTime)
+                updateAppScreenTime(today, "YouTube", ytTime)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error syncing screen time: ${e.message}")
         }
     }
 
@@ -120,6 +125,19 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 }
             }
             serviceScope.launch { syncScreenTimeWithSystem() }
+
+            // Detect app opening or switching
+            if (packageName != lastForegroundApp) {
+                lastForegroundApp = packageName
+                val appType = when {
+                    packageName.contains("instagram") -> "Instagram"
+                    packageName.contains("youtube") -> "YouTube"
+                    else -> null
+                }
+                if (appType != null) {
+                    resetAlertTimerOnAppOpen(appType)
+                }
+            }
         }
 
         val screenHeight = getScreenHeight()
@@ -139,13 +157,17 @@ class ScrollerAccessibilityService : AccessibilityService() {
     }
 
     private fun getScreenHeight(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            windowManager.currentWindowMetrics.bounds.height()
-        } else {
-            val dm = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.getRealMetrics(dm)
-            dm.heightPixels
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                windowManager.currentWindowMetrics.bounds.height()
+            } else {
+                val dm = DisplayMetrics()
+                @Suppress("DEPRECATION")
+                windowManager.defaultDisplay.getRealMetrics(dm)
+                dm.heightPixels
+            }
+        } catch (e: Exception) {
+            1920 
         }
     }
 
@@ -158,7 +180,6 @@ class ScrollerAccessibilityService : AccessibilityService() {
             
             if (!isTrackingEnabled) return@launch
 
-            // Insert individual scroll event for detailed activity analysis
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             dao.insertEvent(ScrollEvent(timestamp = System.currentTimeMillis(), appType = appType, date = today))
 
@@ -203,7 +224,8 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 }
 
                 val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
-                val limit = dao.getSetting(limitKey)?.toIntOrNull() ?: 100
+                val limitValue = dao.getSetting(limitKey)
+                val limit = limitValue?.toIntOrNull() ?: 100
                 
                 if (newCount >= limit) {
                     handleOverLimitAlerts(appType, newCount, today)
@@ -213,26 +235,60 @@ class ScrollerAccessibilityService : AccessibilityService() {
     }
 
     private fun handleOverLimitAlerts(appType: String, currentTotalCount: Int, today: String) {
-        if (lastAlertDate != today) {
-            lastAlertedCount.clear()
-            lastAlertDate = today
-        }
-
         serviceScope.launch {
             val dao = db.scrollDao()
             val isAlertEnabled = dao.getSetting("alert_screen_enabled")?.toBoolean() ?: true
             if (!isAlertEnabled) return@launch
 
             val gapKey = if (appType == "Instagram") "alert_gap_ig" else "alert_gap_yt"
-            val n = dao.getSetting(gapKey)?.toIntOrNull() ?: 10
+            val gapValue = dao.getSetting(gapKey)
+            val n = gapValue?.toIntOrNull() ?: 10
             
-            val lastAlerted = lastAlertedCount[appType] ?: 0
+            val shouldShow = synchronized(lastAlertedCount) {
+                if (lastAlertDate != today) {
+                    lastAlertedCount.clear()
+                    lastAlertDate = today
+                }
+                val lastAlerted = lastAlertedCount[appType] ?: 0
+                
+                // Show immediately when crossing limit for the first time today (lastAlerted == 0)
+                // or if the count has reached the next gap interval.
+                if (lastAlerted == 0 || currentTotalCount < lastAlerted || (currentTotalCount - lastAlerted) >= n) {
+                    lastAlertedCount[appType] = currentTotalCount
+                    true
+                } else false
+            }
             
-            if (lastAlerted == 0 || currentTotalCount < lastAlerted || (currentTotalCount - lastAlerted) >= n) {
-                lastAlertedCount[appType] = currentTotalCount
-                serviceScope.launch(Dispatchers.Main) {
+            if (shouldShow) {
+                withContext(Dispatchers.Main) {
                     showLimitReachedOverlay(appType)
                 }
+            }
+        }
+    }
+
+    private fun resetAlertTimerOnAppOpen(appType: String) {
+        serviceScope.launch {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val dao = db.scrollDao()
+            val record = dao.getRecord(today, appType)
+            val currentCount = record?.scrollCount ?: 0
+            
+            val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
+            val limitValue = dao.getSetting(limitKey)
+            val limit = limitValue?.toIntOrNull() ?: 100
+            
+            if (currentCount >= limit) {
+                synchronized(lastAlertedCount) {
+                    if (lastAlertDate != today) {
+                        lastAlertedCount.clear()
+                        lastAlertDate = today
+                    }
+                    // Reset the reference point to the current count on app open
+                    // This forces the user to wait for the gap 'n' before the next alert.
+                    lastAlertedCount[appType] = currentCount
+                }
+                Log.d(TAG, "Reset alert timer for $appType as user is over limit ($currentCount >= $limit)")
             }
         }
     }
@@ -241,57 +297,165 @@ class ScrollerAccessibilityService : AccessibilityService() {
         if (overlayView != null) return
         Log.d(TAG, "showLimitReachedOverlay for $appType")
         
-        val lifecycleOwner = OverlayLifecycleOwner()
-        lifecycleOwner.performRestore(null)
-        
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-            PixelFormat.TRANSLUCENT
-        ).apply { 
-            gravity = Gravity.CENTER
-            flags = flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-        }
-        
-        val composeView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(lifecycleOwner)
-            setViewTreeViewModelStoreOwner(lifecycleOwner)
-            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            setContent {
-                TodoHabitPanel(db = db, appName = appType, onDismiss = { removeOverlay() })
-            }
-        }
-        
         try {
-            windowManager.addView(composeView, params)
-            overlayView = composeView
-            currentLifecycleOwner = lifecycleOwner
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
-            lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            // Apply the theme using ContextThemeWrapper before inflation
+            val contextWrapper = ContextThemeWrapper(this, R.style.Theme_ScrollersDashboard)
+            
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or 
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or 
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                PixelFormat.TRANSLUCENT
+            ).apply { 
+                gravity = Gravity.CENTER
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+                screenOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            }
+            
+            val inflater = LayoutInflater.from(contextWrapper)
+            val view = inflater.inflate(R.layout.layout_alert_screen, null)
+            
+            overlayScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+            setupAlertView(view, appType, contextWrapper)
+            
+            windowManager.addView(view, params)
+            overlayView = view
         } catch (e: Exception) {
             Log.e(TAG, "Error adding overlay: ${e.message}")
+            overlayScope?.cancel()
+            overlayScope = null
+        }
+    }
+
+    private fun setupAlertView(view: View, appType: String, themedContext: Context) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val dao = db.scrollDao()
+
+        val headerContainer = view.findViewById<View>(R.id.headerContainer)
+        val tvStats = view.findViewById<TextView>(R.id.tvStats)
+        val tvLimit = view.findViewById<TextView>(R.id.tvLimit)
+        
+        val rvHabits = view.findViewById<RecyclerView>(R.id.rvHabits)
+        val rvTasks = view.findViewById<RecyclerView>(R.id.rvTasks)
+        val pbHabits = view.findViewById<ProgressBar>(R.id.pbHabits)
+        val pbTasks = view.findViewById<ProgressBar>(R.id.pbTasks)
+        val tvHabitsCount = view.findViewById<TextView>(R.id.tvHabitsCount)
+        val tvTasksCount = view.findViewById<TextView>(R.id.tvTasksCount)
+
+        val etHabit = view.findViewById<EditText>(R.id.etHabit)
+        val btnAddHabit = view.findViewById<ImageButton>(R.id.btnAddHabit)
+        val etTask = view.findViewById<EditText>(R.id.etTask)
+        val btnAddTask = view.findViewById<ImageButton>(R.id.btnAddTask)
+
+        val btnQuit = view.findViewById<MaterialButton>(R.id.btnQuit)
+        val btnContinue = view.findViewById<MaterialButton>(R.id.btnContinue)
+
+        if (appType == "Instagram") {
+            headerContainer.setBackgroundResource(R.drawable.bg_alert_header_instagram)
+        } else {
+            headerContainer.setBackgroundResource(R.drawable.bg_alert_header_youtube)
+        }
+
+        val habitsAdapter = TaskAdapter(emptyList(), 
+            onToggle = { task -> 
+                val habit = task as HabitTask
+                val isDone = habit.lastCompletedDate == today
+                serviceScope.launch { dao.insertHabit(habit.copy(lastCompletedDate = if (isDone) "" else today)) }
+            },
+            onDelete = { task -> serviceScope.launch { dao.deleteHabit((task as HabitTask).id) } }
+        )
+        rvHabits.layoutManager = LinearLayoutManager(themedContext)
+        rvHabits.adapter = habitsAdapter
+
+        val tasksAdapter = TaskAdapter(emptyList(),
+            onToggle = { task ->
+                val todo = task as TodoTask
+                serviceScope.launch { dao.insertTodo(todo.copy(isCompleted = !todo.isCompleted)) }
+            },
+            onDelete = { task -> serviceScope.launch { dao.deleteTodo((task as TodoTask).id) } }
+        )
+        rvTasks.layoutManager = LinearLayoutManager(themedContext)
+        rvTasks.adapter = tasksAdapter
+
+        overlayScope?.launch {
+            val record = withContext(Dispatchers.IO) { dao.getRecord(today, appType) }
+            val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
+            val limitValue = withContext(Dispatchers.IO) { dao.getSetting(limitKey) }
+            val limit = limitValue?.toIntOrNull() ?: 100
+            
+            tvStats.text = "You've scrolled ${record?.scrollCount ?: 0} ${if (appType == "Instagram") "reels" else "shorts"}"
+            tvLimit.text = limit.toString()
+
+            launch {
+                dao.getHabitTasks().collect { habits ->
+                    val completed = habits.count { it.lastCompletedDate == today }
+                    tvHabitsCount.text = "$completed/${habits.size}"
+                    pbHabits.progress = if (habits.isNotEmpty()) (completed * 100 / habits.size) else 0
+                    habitsAdapter.updateTasks(habits)
+                }
+            }
+            
+            launch {
+                dao.getTodoTasks(today).collect { tasks ->
+                    val completed = tasks.count { it.isCompleted }
+                    tvTasksCount.text = "$completed/${tasks.size}"
+                    pbTasks.progress = if (tasks.isNotEmpty()) (completed * 100 / tasks.size) else 0
+                    tasksAdapter.updateTasks(tasks)
+                }
+            }
+        }
+
+        btnAddHabit.setOnClickListener {
+            val text = etHabit.text.toString()
+            if (text.isNotBlank()) {
+                serviceScope.launch {
+                    dao.insertHabit(HabitTask(title = text))
+                    withContext(Dispatchers.Main) { etHabit.text.clear() }
+                }
+            }
+        }
+
+        btnAddTask.setOnClickListener {
+            val text = etTask.text.toString()
+            if (text.isNotBlank()) {
+                serviceScope.launch {
+                    dao.insertTodo(TodoTask(title = text, date = today))
+                    withContext(Dispatchers.Main) { etTask.text.clear() }
+                }
+            }
+        }
+
+        btnQuit.setOnClickListener {
+            removeOverlay()
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
+
+        btnContinue.setOnClickListener {
+            removeOverlay()
         }
     }
 
     private fun removeOverlay() {
         overlayView?.let {
-            currentLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-            currentLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-            currentLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
             try {
                 windowManager.removeView(it)
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Log.e(TAG, "Error removing overlay: ${e.message}")
+            }
             overlayView = null
-            currentLifecycleOwner = null
         }
+        overlayScope?.cancel()
+        overlayScope = null
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("Wellness", "Alerts", NotificationManager.IMPORTANCE_DEFAULT)
+            val channel = NotificationChannel("Wellness", "Alerts", NotificationManager.IMPORTANCE_LOW)
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
@@ -302,6 +466,7 @@ class ScrollerAccessibilityService : AccessibilityService() {
     
     override fun onDestroy() {
         syncJob?.cancel()
+        serviceScope.cancel()
         flushBuffer()
         removeOverlay()
         super.onDestroy()

@@ -37,6 +37,7 @@
     <color name="blue_400">#60A5FA</color>
     <color name="blue_500">#3B82F6</color>
     <color name="blue_600">#2563EB</color>
+    <color name="blue_700">#1D4ED8</color>
     <color name="blue_300">#93C5FD</color>
 
     <color name="red_400">#F87171</color>
@@ -62,6 +63,7 @@
     <color name="youtube_border">#4DEF4444</color>
 
     <color name="green_500_10">#1A22C55E</color>
+    <color name="purple_600_10">#1A9333EA</color>
     <color name="blue_500_10">#1A3B82F6</color>
     <color name="yellow_500_10">#1AEAB308</color>
     <color name="orange_500_10">#1AF97316</color>

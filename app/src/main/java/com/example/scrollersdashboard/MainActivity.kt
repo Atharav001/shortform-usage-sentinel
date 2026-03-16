@@ -630,7 +630,8 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
     val refreshDailyTodoState = db.scrollDao().getSettingFlow("refresh_daily_todo").collectAsState(initial = "true")
     val isRefreshDaily = refreshDailyTodoState.value?.toBoolean() ?: true
 
-    val todoTasks by (if (isRefreshDaily) db.scrollDao().getTodoTasks(today) else db.scrollDao().getAllTodoTasks()).collectAsState(initial = emptyList())
+    // Retrieve tasks: if refresh is ON, only get tasks for today. If OFF, get "permanent_todo" tasks.
+    val todoTasks by (if (isRefreshDaily) db.scrollDao().getTodoTasks(today) else db.scrollDao().getTodoTasks("permanent_todo")).collectAsState(initial = emptyList())
 
     LaunchedEffect(isRefreshDaily) {
         if (isRefreshDaily) {
@@ -664,7 +665,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
         containerColor = Color.Transparent
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 20.dp)) {
-            // View Switcher (Habits vs Todos)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -701,7 +701,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Progress Card
             val currentProgress = if (selectedView == "habits") habitProgress else todoProgress
             val countText = if (selectedView == "habits") "$habitsCompleted of ${habitTasks.size} habits" else "$todosCompleted of ${todoTasks.size} tasks"
             val progressColor = if (selectedView == "habits") Color(0xFF34C759) else Color(0xFF007AFF)
@@ -719,7 +718,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                         Text("Today's Progress", color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
                         Text(countText, color = progressColor.copy(alpha = 0.8f), fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(16.dp))
-                        // Progress Bar
                         Box(modifier = Modifier.width(180.dp).height(8.dp).clip(CircleShape).background(Color(0xFF1F2937).copy(alpha = 0.5f))) {
                             Box(modifier = Modifier.fillMaxWidth(currentProgress).fillMaxHeight().background(progressColor))
                         }
@@ -730,7 +728,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Information Box / Refresh Daily Card
             if (selectedView == "habits") {
                 Box(
                     modifier = Modifier
@@ -758,7 +755,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                 }
                 Spacer(modifier = Modifier.height(24.dp))
             } else {
-                // Refresh Daily Card for To-Do tasks
                 val todoCardColor = Color(0xFF6366F1)
                 Box(
                     modifier = Modifier
@@ -814,7 +810,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // Inline Add Task Input
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -844,8 +839,12 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                     onClick = {
                         if (newTaskText.isNotBlank()) {
                             scope.launch {
-                                if (selectedView == "habits") db.scrollDao().insertHabit(HabitTask(title = newTaskText))
-                                else db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = today))
+                                if (selectedView == "habits") {
+                                    db.scrollDao().insertHabit(HabitTask(title = newTaskText))
+                                } else {
+                                    val date = if (isRefreshDaily) today else "permanent_todo"
+                                    db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = date))
+                                }
                                 newTaskText = ""
                             }
                         }
@@ -859,7 +858,6 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                 }
             }
 
-            // Task List
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (selectedView == "habits") {
                     items(habitTasks) { habit ->
@@ -932,6 +930,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    var dailyIgLimit by remember { mutableStateOf("100") }
+    var dailyYtLimit by remember { mutableStateOf("100") }
     var igLimit by remember { mutableStateOf("50") }
     var ytLimit by remember { mutableStateOf("30") }
     var trackIG by remember { mutableStateOf(true) }
@@ -942,6 +942,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
     val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
     LaunchedEffect(Unit) {
+        dailyIgLimit = db.scrollDao().getSetting("limit_ig") ?: "100"
+        dailyYtLimit = db.scrollDao().getSetting("limit_yt") ?: "100"
         igLimit = db.scrollDao().getSetting("alert_gap_ig") ?: "50"
         ytLimit = db.scrollDao().getSetting("alert_gap_yt") ?: "30"
         trackIG = db.scrollDao().getSetting("track_ig")?.toBoolean() ?: true
@@ -1001,7 +1003,6 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
             .fillMaxSize()
             .verticalScroll(rememberScrollState())) {
             
-            // Header
             Box(modifier = Modifier
                 .fillMaxWidth()
                 .background(Brush.horizontalGradient(listOf(Color(0xFF1F2937), Color(0xFF111827))))
@@ -1012,6 +1013,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                     IconButton(
                         onClick = { 
                             scope.launch {
+                                db.scrollDao().saveSetting(UserSetting("limit_ig", dailyIgLimit))
+                                db.scrollDao().saveSetting(UserSetting("limit_yt", dailyYtLimit))
                                 db.scrollDao().saveSetting(UserSetting("alert_gap_ig", igLimit))
                                 db.scrollDao().saveSetting(UserSetting("alert_gap_yt", ytLimit))
                                 db.scrollDao().saveSetting(UserSetting("track_ig", trackIG.toString()))
@@ -1034,10 +1037,40 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
             }
 
             Column(modifier = Modifier.padding(24.dp)) {
-                // Alert Limits Section
+                SectionTitle("Daily Scroll Limits", Icons.Default.EmojiEvents)
+                
+                AlertLimitCardReplica(
+                    title = "Instagram Daily Limit",
+                    subtitle = "Maximum reels per day",
+                    icon = Icons.Default.PhotoCamera,
+                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
+                    borderColor = Color(0xFF9333EA).copy(alpha = 0.3f),
+                    value = dailyIgLimit,
+                    onValueChange = { dailyIgLimit = it },
+                    unit = "reels",
+                    instruction = "Maximum daily limit",
+                    footer = "Your overall goal is $dailyIgLimit reels per day"
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+
+                AlertLimitCardReplica(
+                    title = "YouTube Daily Limit",
+                    subtitle = "Maximum shorts per day",
+                    icon = Icons.Default.PlayArrow,
+                    gradient = SolidColor(Color(0xFFEF4444)),
+                    borderColor = Color(0xFFEF4444).copy(alpha = 0.3f),
+                    value = dailyYtLimit,
+                    onValueChange = { dailyYtLimit = it },
+                    unit = "shorts",
+                    instruction = "Maximum daily limit",
+                    footer = "Your overall goal is $dailyYtLimit shorts per day"
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 SectionTitle("Alert Limits", Icons.Default.Notifications)
                 
-                // Instagram Alert Card
                 AlertLimitCardReplica(
                     title = "Instagram",
                     subtitle = "Alert frequency",
@@ -1051,7 +1084,6 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // YouTube Alert Card
                 AlertLimitCardReplica(
                     title = "YouTube",
                     subtitle = "Alert frequency",
@@ -1065,7 +1097,6 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Tracking Control Section
                 SectionTitle("Tracking Control", Icons.Default.Dns)
 
                 TrackingControlCardReplica(
@@ -1088,7 +1119,6 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Reset Section
                 SectionTitle("Reset Today's Data", Icons.AutoMirrored.Filled.RotateLeft)
 
                 ResetDataCardReplica(
@@ -1113,7 +1143,6 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Info Box
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1131,146 +1160,6 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                 }
                 
                 Spacer(modifier = Modifier.height(100.dp))
-            }
-        }
-    }
-}
-
-@Composable
-fun SectionTitle(title: String, icon: ImageVector? = null) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 16.dp)
-    ) {
-        if (icon != null) {
-            Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-        }
-        Text(
-            text = title.uppercase(),
-            color = Color.Gray,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-    }
-}
-
-@Composable
-fun AlertLimitCardReplica(title: String, subtitle: String, icon: ImageVector, gradient: Brush, borderColor: Color, value: String, onValueChange: (String) -> Unit, unit: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .drawBehind { 
-                drawRoundRect(gradient, alpha = 0.1f, cornerRadius = CornerRadius(24.dp.toPx()))
-            }
-            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
-            .padding(20.dp)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
-                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(subtitle, color = Color.Gray, fontSize = 12.sp)
-                }
-            }
-            
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF1F2937).copy(alpha = 0.5f)).padding(16.dp)) {
-                Column {
-                    Text("Alert after every", color = Color(0xFFD1D5DB), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        BasicTextField(
-                            value = value,
-                            onValueChange = onValueChange,
-                            textStyle = TextStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f).background(Color(0xFF111827).copy(alpha = 0.5f), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
-                            cursorBrush = SolidColor(Color.White)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(unit, color = Color(0xFF9CA3AF), fontWeight = FontWeight.Medium)
-                    }
-                    Text("Alert screen will appear after scrolling $value $unit", color = Color(0xFF6B7280), fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TrackingControlCardReplica(title: String, isTracking: Boolean, onToggle: () -> Unit, gradient: Brush, icon: ImageVector) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
-            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(if (isTracking) "Currently tracking" else "Paused", color = Color(0xFF9CA3AF), fontSize = 12.sp)
-                }
-            }
-            
-            Box(
-                modifier = Modifier
-                    .width(56.dp)
-                    .height(32.dp)
-                    .clip(CircleShape)
-                    .background(if (isTracking) gradient else SolidColor(Color(0xFF374151)))
-                    .clickable { onToggle() }
-                    .padding(4.dp),
-                contentAlignment = if (isTracking) Alignment.CenterEnd else Alignment.CenterStart
-            ) {
-                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(if (isTracking) Color.White else Color(0xFF9CA3AF)).shadow(elevation = 4.dp, shape = CircleShape))
-            }
-        }
-    }
-}
-
-@Composable
-fun ResetDataCardReplica(title: String, description: String, gradient: Brush, icon: ImageVector, onReset: () -> Unit, accentColor: Color) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
-            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(description, color = Color(0xFF9CA3AF), fontSize = 12.sp)
-                }
-            }
-            
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(accentColor.copy(alpha = 0.2f))
-                    .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                    .clickable { onReset() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text("Reset", color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
         }
     }

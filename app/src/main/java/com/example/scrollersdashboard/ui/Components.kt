@@ -11,6 +11,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -33,7 +35,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -689,3 +693,154 @@ fun Modifier.skeuomorphicCard(isDarkMode: Boolean, cornerRadius: Dp = 24.dp, ele
 
 fun Modifier.skeuomorphicButton(isDarkMode: Boolean, isPressed: Boolean, cornerRadius: Dp = 16.dp): Modifier = 
     this.liquidGlassButton(isDarkMode, isPressed, cornerRadius)
+
+@Composable
+fun SectionTitle(title: String, icon: ImageVector? = null) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(bottom = 16.dp)
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = title.uppercase(),
+            color = Color.Gray,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.sp
+        )
+    }
+}
+
+@Composable
+fun AlertLimitCardReplica(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    gradient: Brush,
+    borderColor: Color,
+    value: String,
+    onValueChange: (String) -> Unit,
+    unit: String,
+    instruction: String = "Alert after every",
+    footer: String? = null
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .drawBehind { 
+                drawRoundRect(gradient, alpha = 0.1f, cornerRadius = CornerRadius(24.dp.toPx()))
+            }
+            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+            .padding(20.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(subtitle, color = Color.Gray, fontSize = 12.sp)
+                }
+            }
+            
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF1F2937).copy(alpha = 0.5f)).padding(16.dp)) {
+                Column {
+                    Text(instruction, color = Color(0xFFD1D5DB), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        BasicTextField(
+                            value = value,
+                            onValueChange = onValueChange,
+                            textStyle = TextStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f).background(Color(0xFF111827).copy(alpha = 0.5f), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+                            cursorBrush = SolidColor(Color.White)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(unit, color = Color(0xFF9CA3AF), fontWeight = FontWeight.Medium)
+                    }
+                    Text(footer ?: "Alert screen will appear after scrolling $value $unit", color = Color(0xFF6B7280), fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TrackingControlCardReplica(title: String, isTracking: Boolean, onToggle: () -> Unit, gradient: Brush, icon: ImageVector) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
+            .padding(16.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(if (isTracking) "Currently tracking" else "Paused", color = Color(0xFF9CA3AF), fontSize = 12.sp)
+                }
+            }
+            
+            Box(
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(32.dp)
+                    .clip(CircleShape)
+                    .background(if (isTracking) gradient else SolidColor(Color(0xFF374151)))
+                    .clickable { onToggle() }
+                    .padding(4.dp),
+                contentAlignment = if (isTracking) Alignment.CenterEnd else Alignment.CenterStart
+            ) {
+                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(if (isTracking) Color.White else Color(0xFF9CA3AF)).shadow(elevation = 4.dp, shape = CircleShape))
+            }
+        }
+    }
+}
+
+@Composable
+fun ResetDataCardReplica(title: String, description: String, gradient: Brush, icon: ImageVector, onReset: () -> Unit, accentColor: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
+            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
+            .padding(16.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(description, color = Color(0xFF9CA3AF), fontSize = 12.sp)
+                }
+            }
+            
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(accentColor.copy(alpha = 0.2f))
+                    .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                    .clickable { onReset() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Reset", color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}

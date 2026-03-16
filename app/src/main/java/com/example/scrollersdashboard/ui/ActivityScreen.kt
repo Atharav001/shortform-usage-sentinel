@@ -29,18 +29,25 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.scrollersdashboard.AppDatabase
+import com.example.scrollersdashboard.ScrollEvent
 import com.example.scrollersdashboard.ui.theme.*
+import java.text.SimpleDateFormat
 import java.util.*
 
 @Immutable
 data class Session(
-    val id: String,
     val startTime: String,
-    val endTime: String?,
+    val endTime: String,
     val scrolls: Int,
-    val duration: String,
-    val instagram: Int,
-    val youtube: Int
+    val appType: String,
+    val startTimestamp: Long
+)
+
+@Immutable
+data class HourlyData(
+    val label: String,
+    val instagramCount: Int,
+    val youtubeCount: Int
 )
 
 @Immutable
@@ -64,57 +71,128 @@ fun ActivityScreen(
     onBack: (Offset) -> Unit
 ) {
     var selectedTab by remember { mutableStateOf("Day") }
+    val today = remember(refreshKey) { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+
+    // Real data for analysis
+    val allRecords by db.scrollDao().getAllRecords().collectAsState(initial = emptyList())
+    val dayEvents by db.scrollDao().getEventsForDate(today).collectAsState(initial = emptyList())
     
-    // Data from .tsx
-    val dayData = remember {
-        listOf(
-            ChartEntry("0h", 0), ChartEntry("1h", 43), ChartEntry("2h", 52),
-            ChartEntry("3h", 0), ChartEntry("4h", 0), ChartEntry("5h", 0),
-            ChartEntry("6h", 15), ChartEntry("7h", 8), ChartEntry("8h", 0),
-            ChartEntry("9h", 0), ChartEntry("10h", 0), ChartEntry("11h", 0),
-            ChartEntry("12h", 38), ChartEntry("13h", 51), ChartEntry("14h", 12),
-            ChartEntry("15h", 31), ChartEntry("16h", 35), ChartEntry("17h", 28),
-            ChartEntry("18h", 19), ChartEntry("19h", 0), ChartEntry("20h", 0),
-            ChartEntry("21h", 0), ChartEntry("22h", 0), ChartEntry("23h", 0)
-        )
+    val igLimitStr by db.scrollDao().getSettingFlow("limit_ig").collectAsState(initial = "100")
+    val ytLimitStr by db.scrollDao().getSettingFlow("limit_yt").collectAsState(initial = "100")
+    val igLimit = igLimitStr?.toIntOrNull() ?: 100
+    val ytLimit = ytLimitStr?.toIntOrNull() ?: 100
+
+    // Processing Hourly Data (Day Tab)
+    val hourlyDataList = remember(dayEvents) {
+        val list = MutableList(24) { hour -> HourlyData("${hour}h", 0, 0) }
+        val cal = Calendar.getInstance()
+        dayEvents.forEach { event ->
+            cal.timeInMillis = event.timestamp
+            val hour = cal.get(Calendar.HOUR_OF_DAY)
+            if (hour in 0..23) {
+                if (event.appType == "Instagram") {
+                    list[hour] = list[hour].copy(instagramCount = list[hour].instagramCount + 1)
+                } else if (event.appType == "YouTube") {
+                    list[hour] = list[hour].copy(youtubeCount = list[hour].youtubeCount + 1)
+                }
+            }
+        }
+        list
     }
 
-    val weekData = remember {
-        listOf(
-            ChartEntry("Mon", 156), ChartEntry("Tue", 234), ChartEntry("Wed", 189),
-            ChartEntry("Thu", 278), ChartEntry("Fri", 312), ChartEntry("Sat", 245),
-            ChartEntry("Sun", 198)
-        )
+    // Processing Weekly Data (Week Tab)
+    val weeklyDataList = remember(allRecords) {
+        val cal = Calendar.getInstance()
+        cal.firstDayOfWeek = Calendar.MONDAY
+        cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dayNames = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        
+        List(7) { i ->
+            val dateStr = sdf.format(cal.time)
+            val ig = allRecords.find { it.date == dateStr && it.appType == "Instagram" }?.scrollCount ?: 0
+            val yt = allRecords.find { it.date == dateStr && it.appType == "YouTube" }?.scrollCount ?: 0
+            val label = dayNames[i]
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            HourlyData(label, ig, yt)
+        }
     }
 
-    val monthData = remember {
-        listOf(
-            ChartEntry("1", 156), ChartEntry("2", 234), ChartEntry("3", 189),
-            ChartEntry("4", 278), ChartEntry("5", 312), ChartEntry("6", 245),
-            ChartEntry("7", 198), ChartEntry("8", 167), ChartEntry("9", 223),
-            ChartEntry("10", 201), ChartEntry("11", 245), ChartEntry("12", 189),
-            ChartEntry("13", 267), ChartEntry("14", 236)
-        )
+    // Processing Monthly Data (Month Tab)
+    val monthlyDataList = remember(allRecords) {
+        val cal = Calendar.getInstance()
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        
+        List(daysInMonth) { i ->
+            val dateStr = sdf.format(cal.time)
+            val ig = allRecords.find { it.date == dateStr && it.appType == "Instagram" }?.scrollCount ?: 0
+            val yt = allRecords.find { it.date == dateStr && it.appType == "YouTube" }?.scrollCount ?: 0
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            ChartEntry((i + 1).toString(), ig + yt)
+        }
     }
 
-    val calendarDays = remember {
-        listOf(
-            CalendarDay(1, true), CalendarDay(2, false), CalendarDay(3, true),
-            CalendarDay(4, false), CalendarDay(5, false), CalendarDay(6, true),
-            CalendarDay(7, true), CalendarDay(8, true), CalendarDay(9, false),
-            CalendarDay(10, true), CalendarDay(11, false), CalendarDay(12, true),
-            CalendarDay(13, false), CalendarDay(14, true)
-        ) + (15..31).map { CalendarDay(it, null) }
+    // Processing Calendar Data (Current Month)
+    val calendarDays = remember(allRecords, igLimit, ytLimit) {
+        val cal = Calendar.getInstance()
+        val daysInMonth = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        val monthStartDayOfWeek = cal.get(Calendar.DAY_OF_WEEK) // 1=Sun, 2=Mon...
+        
+        val paddingCount = if (monthStartDayOfWeek == Calendar.SUNDAY) 6 else monthStartDayOfWeek - Calendar.MONDAY
+        val padding = List(paddingCount) { CalendarDay(0, null) }
+        
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val days = List(daysInMonth) { i ->
+            val dateStr = sdf.format(cal.time)
+            val ig = allRecords.find { it.date == dateStr && it.appType == "Instagram" }?.scrollCount ?: 0
+            val yt = allRecords.find { it.date == dateStr && it.appType == "YouTube" }?.scrollCount ?: 0
+            
+            val totalScrolls = ig + yt
+            val hasActivity = totalScrolls > 0
+            val isFuture = cal.timeInMillis > System.currentTimeMillis()
+            
+            // Only show red or green sign when the scroll count was counted (hasActivity)
+            // This naturally handles the "before installation" logic as there would be no counts.
+            val underLimit = when {
+                isFuture -> null
+                !hasActivity -> null
+                else -> (ig <= igLimit && yt <= ytLimit)
+            }
+            
+            val day = CalendarDay(i + 1, underLimit)
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+            day
+        }
+        padding + days
     }
 
-    val sessions = remember {
-        listOf(
-            Session("1", "5:14 pm", "5:16 pm", 11, "1m", 11, 0),
-            Session("2", "4:27 pm", null, 1, "0s", 1, 0),
-            Session("3", "4:13 pm", "4:20 pm", 47, "7m", 18, 29),
-            Session("4", "3:54 pm", "3:57 pm", 36, "3m", 1, 35),
-            Session("5", "2:51 pm", "2:52 pm", 12, "51s", 12, 0)
-        )
+    val sessions = remember(dayEvents) {
+        val result = mutableListOf<Session>()
+        if (dayEvents.isEmpty()) return@remember result
+
+        var currentSessionEvents = mutableListOf<ScrollEvent>()
+        val SESSION_THRESHOLD_MS = 2 * 60 * 1000L
+
+        dayEvents.forEach { event ->
+            if (currentSessionEvents.isEmpty()) {
+                currentSessionEvents.add(event)
+            } else {
+                val lastEvent = currentSessionEvents.last()
+                if (event.appType == lastEvent.appType && (event.timestamp - lastEvent.timestamp) < SESSION_THRESHOLD_MS) {
+                    currentSessionEvents.add(event)
+                } else {
+                    result.add(createSessionFromEvents(currentSessionEvents))
+                    currentSessionEvents = mutableListOf(event)
+                }
+            }
+        }
+        if (currentSessionEvents.isNotEmpty()) {
+            result.add(createSessionFromEvents(currentSessionEvents))
+        }
+        result.reversed()
     }
 
     Scaffold(
@@ -193,12 +271,6 @@ fun ActivityScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 item {
-                    val currentData = when (selectedTab) {
-                        "Day" -> dayData
-                        "Week" -> weekData
-                        else -> monthData
-                    }
-                    
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -207,11 +279,11 @@ fun ActivityScreen(
                             .border(1.dp, Color(0xFF374151), RoundedCornerShape(24.dp))
                             .padding(16.dp)
                     ) {
-                        ActivityBarChart(
-                            data = currentData,
-                            maxBarSize = if (selectedTab == "Day") 12.dp else 24.dp,
-                            interval = if (selectedTab == "Day") 5 else 0
-                        )
+                        when (selectedTab) {
+                            "Day" -> DualBarActivityChart(data = hourlyDataList, labelInterval = 4)
+                            "Week" -> DualBarActivityChart(data = weeklyDataList, labelInterval = 1)
+                            "Month" -> MonthlyCombinedChart(data = monthlyDataList)
+                        }
                     }
                 }
 
@@ -221,18 +293,32 @@ fun ActivityScreen(
                     }
                 }
 
-                item {
-                    Text(
-                        "SESSIONS",
-                        color = Gray400,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                }
+                if (selectedTab == "Day") {
+                    item {
+                        Text(
+                            "SESSIONS",
+                            color = Gray400,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                    }
 
-                items(sessions) { session ->
-                    SessionItem(session)
+                    if (sessions.isEmpty()) {
+                        item {
+                            Text(
+                                "No scrolling activity recorded for today.",
+                                color = Gray500,
+                                fontSize = 14.sp,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        items(sessions) { session ->
+                            SessionItem(session)
+                        }
+                    }
                 }
 
                 item {
@@ -243,14 +329,26 @@ fun ActivityScreen(
     }
 }
 
+private fun createSessionFromEvents(events: List<ScrollEvent>): Session {
+    val first = events.first()
+    val last = events.last()
+    val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+    return Session(
+        startTime = timeFormat.format(Date(first.timestamp)),
+        endTime = timeFormat.format(Date(last.timestamp)),
+        scrolls = events.size,
+        appType = first.appType,
+        startTimestamp = first.timestamp
+    )
+}
+
 @Composable
-fun ActivityBarChart(
-    data: List<ChartEntry>,
-    maxBarSize: androidx.compose.ui.unit.Dp,
-    interval: Int
-) {
+fun DualBarActivityChart(data: List<HourlyData>, labelInterval: Int) {
     val textMeasurer = rememberTextMeasurer()
-    val maxVal = (data.maxOfOrNull { it.value } ?: 55).coerceAtLeast(55).toFloat()
+    val maxVal = remember(data) {
+        val peak = data.maxOfOrNull { maxOf(it.instagramCount, it.youtubeCount) } ?: 0
+        maxOf(peak.toFloat(), 20f) * 1.2f
+    }
     
     Canvas(modifier = Modifier.fillMaxWidth().height(280.dp)) {
         val width = size.width
@@ -260,10 +358,11 @@ fun ActivityBarChart(
         val chartWidth = width - paddingLeft
         val chartHeight = height - paddingBottom
         
-        // Grid lines
-        val ticks = listOf(0, 13, 27, 41, 55)
-        ticks.forEach { tick ->
-            val y = chartHeight - (tick / maxVal) * chartHeight
+        // Y-Axis Ticks
+        val tickCount = 5
+        for (i in 0 until tickCount) {
+            val tickVal = (maxVal / (tickCount - 1) * i).toInt()
+            val y = chartHeight - (tickVal / maxVal) * chartHeight
             drawLine(
                 color = Color(0xFF374151),
                 start = Offset(paddingLeft, y),
@@ -272,43 +371,119 @@ fun ActivityBarChart(
             )
             
             val textStyle = TextStyle(color = Gray400, fontSize = 10.sp)
-            val textLayout = textMeasurer.measure(tick.toString(), style = textStyle)
+            val textLayout = textMeasurer.measure(tickVal.toString(), style = textStyle)
             drawText(
                 textMeasurer = textMeasurer,
-                text = tick.toString(),
+                text = tickVal.toString(),
                 style = textStyle,
                 topLeft = Offset(paddingLeft - textLayout.size.width - 8.dp.toPx(), y - textLayout.size.height / 2)
             )
         }
 
-        val barAreaWidth = chartWidth / data.size
-        val barWidthPx = maxBarSize.toPx()
+        val areaWidth = chartWidth / data.size
+        val barGap = 2.dp.toPx()
+        val barWidth = (areaWidth - barGap * 3) / 2
         
         data.forEachIndexed { index, entry ->
-            val barHeight = (entry.value / maxVal) * chartHeight
-            val x = paddingLeft + (index * barAreaWidth) + (barAreaWidth - barWidthPx) / 2
-            val y = chartHeight - barHeight
-            
-            drawRoundRect(
-                color = when {
-                    entry.value == 0 -> Color(0xFF374151)
-                    entry.value < 20 -> Color(0xFFEC4899)
-                    entry.value < 40 -> Color(0xFFF97316)
-                    else -> Color(0xFFEF4444)
-                },
-                topLeft = Offset(x, y),
-                size = Size(barWidthPx, barHeight),
-                cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx())
-            )
+            // Instagram Bar
+            if (entry.instagramCount > 0) {
+                val igBarHeight = (entry.instagramCount / maxVal) * chartHeight
+                drawRoundRect(
+                    brush = Brush.verticalGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
+                    topLeft = Offset(paddingLeft + index * areaWidth + barGap, chartHeight - igBarHeight),
+                    size = Size(barWidth, igBarHeight),
+                    cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+            }
 
-            if (interval == 0 || index % interval == 0) {
+            // YouTube Bar
+            if (entry.youtubeCount > 0) {
+                val ytBarHeight = (entry.youtubeCount / maxVal) * chartHeight
+                drawRoundRect(
+                    color = Color(0xFFEF4444),
+                    topLeft = Offset(paddingLeft + index * areaWidth + barWidth + barGap * 2, chartHeight - ytBarHeight),
+                    size = Size(barWidth, ytBarHeight),
+                    cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+            }
+
+            // X-Axis Labels
+            if (index % labelInterval == 0) {
                 val textStyle = TextStyle(color = Gray400, fontSize = 10.sp)
                 val textLayout = textMeasurer.measure(entry.label, style = textStyle)
                 drawText(
                     textMeasurer = textMeasurer,
                     text = entry.label,
                     style = textStyle,
-                    topLeft = Offset(x + (barWidthPx - textLayout.size.width) / 2, height - textLayout.size.height)
+                    topLeft = Offset(paddingLeft + index * areaWidth + (areaWidth - textLayout.size.width) / 2, height - textLayout.size.height)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MonthlyCombinedChart(data: List<ChartEntry>) {
+    val textMeasurer = rememberTextMeasurer()
+    val maxVal = remember(data) {
+        val peak = data.maxOfOrNull { it.value } ?: 0
+        maxOf(peak.toFloat(), 50f) * 1.2f
+    }
+    
+    Canvas(modifier = Modifier.fillMaxWidth().height(280.dp)) {
+        val width = size.width
+        val height = size.height
+        val paddingBottom = 30.dp.toPx()
+        val paddingLeft = 35.dp.toPx()
+        val chartWidth = width - paddingLeft
+        val chartHeight = height - paddingBottom
+        
+        // Y-Axis Ticks
+        val tickCount = 5
+        for (i in 0 until tickCount) {
+            val tickVal = (maxVal / (tickCount - 1) * i).toInt()
+            val y = chartHeight - (tickVal / maxVal) * chartHeight
+            drawLine(
+                color = Color(0xFF374151),
+                start = Offset(paddingLeft, y),
+                end = Offset(width, y),
+                strokeWidth = 1.dp.toPx()
+            )
+            
+            val textStyle = TextStyle(color = Gray400, fontSize = 10.sp)
+            val textLayout = textMeasurer.measure(tickVal.toString(), style = textStyle)
+            drawText(
+                textMeasurer = textMeasurer,
+                text = tickVal.toString(),
+                style = textStyle,
+                topLeft = Offset(paddingLeft - textLayout.size.width - 8.dp.toPx(), y - textLayout.size.height / 2)
+            )
+        }
+
+        val areaWidth = chartWidth / data.size
+        val barWidth = areaWidth * 0.8f
+        
+        data.forEachIndexed { index, entry ->
+            if (entry.value > 0) {
+                val barHeight = (entry.value / maxVal) * chartHeight
+                drawRoundRect(
+                    color = Color(0xFF3B82F6),
+                    topLeft = Offset(paddingLeft + index * areaWidth + (areaWidth - barWidth) / 2, chartHeight - barHeight),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+            }
+
+            // X-Axis Labels (Scale of 5)
+            val day = entry.label.toInt()
+            if (day == 1 || day % 5 == 0) {
+                val textStyle = TextStyle(color = Gray400, fontSize = 10.sp)
+                val textLayout = textMeasurer.measure(entry.label, style = textStyle)
+                drawText(
+                    textMeasurer = textMeasurer,
+                    text = entry.label,
+                    style = textStyle,
+                    topLeft = Offset(paddingLeft + index * areaWidth + (areaWidth - textLayout.size.width) / 2, height - textLayout.size.height)
                 )
             }
         }
@@ -317,6 +492,7 @@ fun ActivityBarChart(
 
 @Composable
 fun MonthCalendarView(days: List<CalendarDay>) {
+    val monthName = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date()) }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -326,9 +502,9 @@ fun MonthCalendarView(days: List<CalendarDay>) {
             .padding(16.dp)
     ) {
         Column {
-            Text("March 2026", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+            Text(monthName, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
             
-            val daysOfWeek = listOf("S", "M", "T", "W", "T", "F", "S")
+            val daysOfWeek = listOf("M", "T", "W", "T", "F", "S", "S")
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 daysOfWeek.forEach {
                     Text(it, color = Gray500, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
@@ -345,16 +521,18 @@ fun MonthCalendarView(days: List<CalendarDay>) {
                             modifier = Modifier.weight(1f).aspectRatio(1f),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(day.date.toString(), color = Gray300, fontSize = 14.sp)
-                            if (day.underLimit != null) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = 4.dp)
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(if (day.underLimit) Color(0xFF22C55E) else Color(0xFFEF4444))
-                                )
+                            if (day.date != 0) {
+                                Text(day.date.toString(), color = Gray300, fontSize = 14.sp)
+                                if (day.underLimit != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(bottom = 4.dp)
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(if (day.underLimit) Color(0xFF22C55E) else Color(0xFFEF4444))
+                                    )
+                                }
                             }
                         }
                     }
@@ -403,7 +581,7 @@ fun SessionItem(session: Session) {
                     Icon(Icons.Default.AccessTime, null, tint = Gray400, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        "${session.startTime}${if (session.endTime != null) " - ${session.endTime}" else ""}",
+                        "${session.startTime} - ${session.endTime}",
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium
@@ -411,32 +589,29 @@ fun SessionItem(session: Session) {
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "${session.scrolls} scrolls • ${session.duration} duration",
+                    "${session.scrolls} scrolls",
                     color = Gray400,
                     fontSize = 13.sp
                 )
             }
             
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (session.instagram > 0) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777), Color(0xFFF97316))))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text("${session.instagram} IG", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
-                    }
+            if (session.appType == "Instagram") {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777), Color(0xFFF97316))))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("Instagram", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
                 }
-                if (session.youtube > 0) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFEF4444))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text("${session.youtube} YT", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
-                    }
+            } else if (session.appType == "YouTube") {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFEF4444))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text("YouTube", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
                 }
             }
         }

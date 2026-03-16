@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,7 +37,13 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
     
-    val todoTasks by db.scrollDao().getTodoTasks(today).collectAsState(initial = emptyList())
+    val refreshDailyState by db.scrollDao().getSettingFlow("refresh_daily_todo").collectAsState(initial = "true")
+    val isRefreshDaily = refreshDailyState?.toBoolean() ?: true
+
+    // If Refresh Daily is OFF, we use a fixed date "permanent_todo" to store/retrieve them
+    val todoDate = if (isRefreshDaily) today else "permanent_todo"
+    
+    val todoTasks by db.scrollDao().getTodoTasks(todoDate).collectAsState(initial = emptyList())
     val habitTasks by db.scrollDao().getHabitTasks().collectAsState(initial = emptyList())
 
     var newTaskTitle by remember { mutableStateOf("") }
@@ -44,7 +51,6 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
     var dialogType by remember { mutableStateOf("todo") }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Full screen background with a slight blur of what's behind
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -52,19 +58,17 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                 .clickable { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
-            // Main Glassmorphism Panel
             GlassCard(
                 modifier = Modifier
                     .fillMaxWidth(0.9f)
                     .wrapContentHeight()
-                    .clickable(enabled = false) {}, // Prevent click-through
+                    .clickable(enabled = false) {},
                 cornerRadius = 32.dp
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Header
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -76,26 +80,27 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                             color = Color.White,
                             fontSize = 28.sp,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = (-0.5).sp
+                            letterSpacing = (-0.5).sp,
+                            textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Surface(
-                            color = Color(0xFF34C759).copy(alpha = 0.15f),
+                            color = Color(0xFF9333EA).copy(alpha = 0.15f),
                             shape = CircleShape,
-                            border = BorderStroke(1.dp, Color(0xFF34C759).copy(alpha = 0.3f))
+                            border = BorderStroke(1.dp, Color(0xFF9333EA).copy(alpha = 0.3f))
                         ) {
                             Text(
                                 "${appName.uppercase()} LIMIT REACHED",
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                color = Color(0xFF34C759),
+                                color = Color(0xFF9333EA),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
-                                letterSpacing = 1.2.sp
+                                letterSpacing = 1.2.sp,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
 
-                    // Tasks Section
                     PanelSection(title = "Today's Tasks", onAdd = {
                         dialogType = "todo"
                         showAddOverlay = true
@@ -105,7 +110,8 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                                 "No tasks for today. Stay focused!",
                                 color = Color.White.copy(alpha = 0.5f),
                                 fontSize = 14.sp,
-                                modifier = Modifier.padding(vertical = 16.dp)
+                                modifier = Modifier.padding(vertical = 16.dp),
+                                textAlign = TextAlign.Center
                             )
                         } else {
                             LazyColumn(
@@ -130,7 +136,6 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Habits Section
                     PanelSection(title = "Habits", onAdd = {
                         dialogType = "habit"
                         showAddOverlay = true
@@ -140,7 +145,8 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                                 "No habits tracked",
                                 color = Color.White.copy(alpha = 0.5f),
                                 fontSize = 14.sp,
-                                modifier = Modifier.padding(vertical = 12.dp)
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                textAlign = TextAlign.Center
                             )
                         } else {
                             LazyColumn(
@@ -174,13 +180,18 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                         isDarkMode = true,
                         cornerRadius = 20.dp
                     ) {
-                        Text("Dismiss & Return", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color.White)
+                        Text(
+                            "Dismiss & Return", 
+                            fontWeight = FontWeight.Bold, 
+                            fontSize = 17.sp, 
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }
         }
 
-        // Custom Add Task Overlay
         if (showAddOverlay) {
             Box(
                 modifier = Modifier
@@ -218,9 +229,9 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color(0xFF34C759),
+                            focusedBorderColor = Color(0xFF9333EA),
                             unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            cursorColor = Color(0xFF34C759)
+                            cursorColor = Color(0xFF9333EA)
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -230,7 +241,7 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                             if (newTaskTitle.isNotBlank()) {
                                 scope.launch {
                                     if (dialogType == "todo") {
-                                        db.scrollDao().insertTodo(TodoTask(title = newTaskTitle, date = today))
+                                        db.scrollDao().insertTodo(TodoTask(title = newTaskTitle, date = todoDate))
                                     } else {
                                         db.scrollDao().insertHabit(HabitTask(title = newTaskTitle))
                                     }
@@ -303,18 +314,18 @@ fun PanelTaskRow(
                     .border(
                         BorderStroke(
                             2.dp,
-                            if (isCompleted) Color(0xFF34C759) else Color.White.copy(alpha = 0.3f)
+                            if (isCompleted) Color(0xFF9333EA) else Color.White.copy(alpha = 0.3f)
                         ),
                         CircleShape
                     )
                     .background(
-                        if (isCompleted) Color(0xFF34C759).copy(alpha = 0.2f) else Color.Transparent,
+                        if (isCompleted) Color(0xFF9333EA).copy(alpha = 0.2f) else Color.Transparent,
                         CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 if (isCompleted) {
-                    Icon(Icons.Default.Check, null, tint = Color(0xFF34C759), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Check, null, tint = Color(0xFF9333EA), modifier = Modifier.size(16.dp))
                 }
             }
             
