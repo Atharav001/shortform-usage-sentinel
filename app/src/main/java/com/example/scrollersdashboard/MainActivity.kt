@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -53,6 +54,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.*
 import androidx.core.content.ContextCompat
@@ -642,8 +644,8 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
     val habitsCompleted = habitTasks.count { it.lastCompletedDate == today }
     val todosCompleted = todoTasks.count { it.isCompleted }
     
-    val habitProgress = if (habitTasks.isNotEmpty()) (habitsCompleted.toFloat() / habitTasks.size) else 0f
-    val todoProgress = if (todoTasks.isNotEmpty()) (todosCompleted.toFloat() / todoTasks.size) else 0f
+    val habitProgress = if (habitTasks.isNotEmpty()) (habitsCompleted.divideSafely(habitTasks.size)) else 0f
+    val todoProgress = if (todoTasks.isNotEmpty()) (todosCompleted.divideSafely(todoTasks.size)) else 0f
 
     var newTaskText by remember { mutableStateOf("") }
 
@@ -810,6 +812,20 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
+            val onAddTask = {
+                if (newTaskText.isNotBlank()) {
+                    scope.launch {
+                        if (selectedView == "habits") {
+                            db.scrollDao().insertHabit(HabitTask(title = newTaskText))
+                        } else {
+                            val date = if (isRefreshDaily) today else "permanent_todo"
+                            db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = date))
+                        }
+                        newTaskText = ""
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -832,23 +848,13 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
                     ),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { onAddTask() })
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 IconButton(
-                    onClick = {
-                        if (newTaskText.isNotBlank()) {
-                            scope.launch {
-                                if (selectedView == "habits") {
-                                    db.scrollDao().insertHabit(HabitTask(title = newTaskText))
-                                } else {
-                                    val date = if (isRefreshDaily) today else "permanent_todo"
-                                    db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = date))
-                                }
-                                newTaskText = ""
-                            }
-                        }
-                    },
+                    onClick = onAddTask,
                     modifier = Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(12.dp))
@@ -887,6 +893,8 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
         }
     }
 }
+
+private fun Int.divideSafely(total: Int): Float = if (total > 0) this.toFloat() / total else 0f
 
 @Composable
 fun GoalItemRow(text: String, isCompleted: Boolean, color: Color, onToggle: () -> Unit, onDelete: () -> Unit) {
@@ -1055,7 +1063,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                     onValueChange = { dailyIgLimit = it },
                     unit = "reels",
                     instruction = "Maximum daily limit",
-                    footer = "Your overall goal is $dailyIgLimit reels per day"
+                    footer = "Your overall goal is $dailyIgLimit reels per day",
+                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("limit_ig", dailyIgLimit)) } }
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1070,7 +1079,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                     onValueChange = { dailyYtLimit = it },
                     unit = "shorts",
                     instruction = "Maximum daily limit",
-                    footer = "Your overall goal is $dailyYtLimit shorts per day"
+                    footer = "Your overall goal is $dailyYtLimit shorts per day",
+                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("limit_yt", dailyYtLimit)) } }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -1085,7 +1095,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                     borderColor = Color(0xFF9333EA).copy(alpha = 0.3f),
                     value = igLimit,
                     onValueChange = { igLimit = it },
-                    unit = "reels"
+                    unit = "reels",
+                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("alert_gap_ig", igLimit)) } }
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1098,7 +1109,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                     borderColor = Color(0xFFEF4444).copy(alpha = 0.3f),
                     value = ytLimit,
                     onValueChange = { ytLimit = it },
-                    unit = "shorts"
+                    unit = "shorts",
+                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("alert_gap_yt", ytLimit)) } }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))

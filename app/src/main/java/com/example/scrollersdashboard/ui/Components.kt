@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -37,6 +38,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -725,7 +727,8 @@ fun AlertLimitCardReplica(
     onValueChange: (String) -> Unit,
     unit: String,
     instruction: String = "Alert after every",
-    footer: String? = null
+    footer: String? = null,
+    onDone: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
@@ -755,9 +758,10 @@ fun AlertLimitCardReplica(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BasicTextField(
                             value = value,
-                            onValueChange = onValueChange,
+                            onValueChange = { if (it.all { char -> char.isDigit() }) onValueChange(it) },
                             textStyle = TextStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { onDone() }),
                             modifier = Modifier.weight(1f).background(Color(0xFF111827).copy(alpha = 0.5f), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
                             cursorBrush = SolidColor(Color.White)
                         )
