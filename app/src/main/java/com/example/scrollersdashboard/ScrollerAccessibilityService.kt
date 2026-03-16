@@ -227,22 +227,21 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 val limitValue = dao.getSetting(limitKey)
                 val limit = limitValue?.toIntOrNull() ?: 100
                 
-                if (newCount >= limit) {
-                    handleOverLimitAlerts(appType, newCount, today)
-                }
+                handleAlerts(appType, newCount, today, limit)
             }
         }
     }
 
-    private fun handleOverLimitAlerts(appType: String, currentTotalCount: Int, today: String) {
+    private fun handleAlerts(appType: String, currentTotalCount: Int, today: String, limit: Int) {
         serviceScope.launch {
             val dao = db.scrollDao()
             val isAlertEnabled = dao.getSetting("alert_screen_enabled")?.toBoolean() ?: true
             if (!isAlertEnabled) return@launch
 
+            val alertOnlyAfterLimit = dao.getSetting("alert_only_after_limit")?.toBoolean() ?: true
             val gapKey = if (appType == "Instagram") "alert_gap_ig" else "alert_gap_yt"
             val gapValue = dao.getSetting(gapKey)
-            val n = gapValue?.toIntOrNull() ?: 10
+            val gap = gapValue?.toIntOrNull() ?: 10
             
             val shouldShow = synchronized(lastAlertedCount) {
                 if (lastAlertDate != today) {
@@ -251,12 +250,24 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 }
                 val lastAlerted = lastAlertedCount[appType] ?: 0
                 
-                // Show immediately when crossing limit for the first time today (lastAlerted == 0)
-                // or if the count has reached the next gap interval.
-                if (lastAlerted == 0 || currentTotalCount < lastAlerted || (currentTotalCount - lastAlerted) >= n) {
-                    lastAlertedCount[appType] = currentTotalCount
-                    true
-                } else false
+                if (alertOnlyAfterLimit) {
+                    // Strict Mode: Only alert after limit is reached
+                    if (currentTotalCount >= limit) {
+                        // Alert once when limit is first exceeded, then every 'gap' scrolls
+                        if (lastAlerted < limit || (currentTotalCount - lastAlerted) >= gap) {
+                            lastAlertedCount[appType] = currentTotalCount
+                            true
+                        } else false
+                    } else false
+                } else {
+                    // Non-Strict Mode (Strict Mode Paused): Alert ONLY based on interval/gap
+                    if (currentTotalCount > 0 && (currentTotalCount - lastAlerted) >= gap) {
+                        lastAlertedCount[appType] = currentTotalCount
+                        true
+                    } else {
+                        false
+                    }
+                }
             }
             
             if (shouldShow) {
@@ -274,21 +285,25 @@ class ScrollerAccessibilityService : AccessibilityService() {
             val record = dao.getRecord(today, appType)
             val currentCount = record?.scrollCount ?: 0
             
+            val alertOnlyAfterLimit = dao.getSetting("alert_only_after_limit")?.toBoolean() ?: true
             val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
             val limitValue = dao.getSetting(limitKey)
             val limit = limitValue?.toIntOrNull() ?: 100
             
-            if (currentCount >= limit) {
+            // If user is over limit, OR if they want alerts based on interval only (Non-Strict)
+            if (currentCount >= limit || !alertOnlyAfterLimit) {
                 synchronized(lastAlertedCount) {
                     if (lastAlertDate != today) {
                         lastAlertedCount.clear()
                         lastAlertDate = today
                     }
-                    // Reset the reference point to the current count on app open
-                    // This forces the user to wait for the gap 'n' before the next alert.
-                    lastAlertedCount[appType] = currentCount
+                    // Sync the last alerted count with current count to start interval fresh
+                    // unless we are already tracking it in this service lifecycle
+                    if (!lastAlertedCount.containsKey(appType)) {
+                        lastAlertedCount[appType] = currentCount
+                    }
                 }
-                Log.d(TAG, "Reset alert timer for $appType as user is over limit ($currentCount >= $limit)")
+                Log.d(TAG, "Initialized alert tracker for $appType on app open. Current count: $currentCount")
             }
         }
     }

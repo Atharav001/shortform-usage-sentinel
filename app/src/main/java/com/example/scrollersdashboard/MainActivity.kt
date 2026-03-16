@@ -936,6 +936,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
     var ytLimit by remember { mutableStateOf("30") }
     var trackIG by remember { mutableStateOf(true) }
     var trackYT by remember { mutableStateOf(true) }
+    var alertOnlyAfterLimit by remember { mutableStateOf(true) }
+    var alertsEnabled by remember { mutableStateOf(true) }
 
     var showResetIGDialog by remember { mutableStateOf(false) }
     var showResetYTDialog by remember { mutableStateOf(false) }
@@ -948,6 +950,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
         ytLimit = db.scrollDao().getSetting("alert_gap_yt") ?: "30"
         trackIG = db.scrollDao().getSetting("track_ig")?.toBoolean() ?: true
         trackYT = db.scrollDao().getSetting("track_yt")?.toBoolean() ?: true
+        alertOnlyAfterLimit = db.scrollDao().getSetting("alert_only_after_limit")?.toBoolean() ?: true
+        alertsEnabled = db.scrollDao().getSetting("alert_screen_enabled")?.toBoolean() ?: true
     }
 
     if (showResetIGDialog) {
@@ -1019,6 +1023,8 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                                 db.scrollDao().saveSetting(UserSetting("alert_gap_yt", ytLimit))
                                 db.scrollDao().saveSetting(UserSetting("track_ig", trackIG.toString()))
                                 db.scrollDao().saveSetting(UserSetting("track_yt", trackYT.toString()))
+                                db.scrollDao().saveSetting(UserSetting("alert_only_after_limit", alertOnlyAfterLimit.toString()))
+                                db.scrollDao().saveSetting(UserSetting("alert_screen_enabled", alertsEnabled.toString()))
                             }
                             onBack(backCenter) 
                         },
@@ -1093,6 +1099,34 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                     value = ytLimit,
                     onValueChange = { ytLimit = it },
                     unit = "shorts"
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                SectionTitle("Alert Behavior", Icons.Default.Timer)
+
+                TrackingControlCardReplica(
+                    title = "Enable Alerts",
+                    isTracking = alertsEnabled,
+                    onToggle = { alertsEnabled = !alertsEnabled },
+                    gradient = Brush.linearGradient(listOf(Color(0xFF10B981), Color(0xFF059669))),
+                    icon = Icons.Default.Notifications
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TrackingControlCardReplica(
+                    title = "Strict Mode",
+                    isTracking = alertOnlyAfterLimit,
+                    onToggle = { alertOnlyAfterLimit = !alertOnlyAfterLimit },
+                    gradient = Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF2563EB))),
+                    icon = Icons.Default.Lock
+                )
+                Text(
+                    text = if (alertOnlyAfterLimit) "Alerts will only appear after daily limit is reached." else "Alerts will appear regularly based on alert frequency, even before the daily limit.",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp, start = 16.dp, end = 16.dp)
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
