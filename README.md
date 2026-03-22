@@ -146,29 +146,29 @@ The dashboard serves as a **Command Center** for your digital health.
     </td>
     <td align="center">
       <strong>⚡ Activity Center</strong><br/><br/>
-      <img src="screenshots/activity_center.png" alt="Activity Center" width="220"/>
+      <img src="https://github.com/user-attachments/assets/bbd6717d-ef5c-4734-99a8-2661a8b1d144" alt="Activity Center" width="220"/>
       <br/><sub>Real-time session breakdown & app usage</sub>
     </td>
     <td align="center">
       <strong>✅ Goals — To-Do List</strong><br/><br/>
-      <img src="screenshots/goals_todo.png" alt="Goals To-Do List" width="220"/>
+      <img src="https://github.com/user-attachments/assets/97283e27-1403-4de4-b2b7-6274a379003f" alt="Goals To-Do List" width="220"/>
       <br/><sub>Daily & permanent tasks at a glance</sub>
     </td>
   </tr>
   <tr>
     <td align="center">
       <strong>🔁 Goals — Habit List</strong><br/><br/>
-      <img src="screenshots/goals_habits.png" alt="Habit List" width="220"/>
+      <img src="https://github.com/user-attachments/assets/94685165-3752-444b-9ed7-e803e338fd0e" alt="Habit List" width="220"/>
       <br/><sub>Recurring habits with 24-hour reset</sub>
     </td>
     <td align="center">
       <strong>📅 History</strong><br/><br/>
-      <img src="screenshots/history.png" alt="History" width="220"/>
+      <img src="https://github.com/user-attachments/assets/1046188d-d2e2-4743-9ddb-df6048492830" alt="History" width="220"/>
       <br/><sub>Past usage, 3-day averages & scroll trends</sub>
     </td>
     <td align="center">
       <strong>⚙️ Settings</strong><br/><br/>
-      <img src="screenshots/settings.png" alt="Settings" width="220"/>
+      <img src="https://github.com/user-attachments/assets/0570299c-ebdc-454c-87fc-d0a81afa4982" alt="Settings" width="220"/>
       <br/><sub>Scroll limits, biometric lock & preferences</sub>
     </td>
   </tr>
