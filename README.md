@@ -135,7 +135,50 @@ The dashboard serves as a **Command Center** for your digital health.
 
 ---
 
-## 📸 App Sections
+## 📸 Screenshots
+
+<table>
+  <tr>
+    <td align="center">
+      <strong>🏠 Home Page</strong><br/><br/>
+      <img src="https://github.com/user-attachments/assets/91019c4c-2ec7-401e-aa68-4f04a1d7ffca" alt="Home Page" width="220"/>
+      <br/><sub>Live scroll counts, streaks & trend indicators</sub>
+    </td>
+    <td align="center">
+      <strong>⚡ Activity Center</strong><br/><br/>
+      <img src="screenshots/activity_center.png" alt="Activity Center" width="220"/>
+      <br/><sub>Real-time session breakdown & app usage</sub>
+    </td>
+    <td align="center">
+      <strong>✅ Goals — To-Do List</strong><br/><br/>
+      <img src="screenshots/goals_todo.png" alt="Goals To-Do List" width="220"/>
+      <br/><sub>Daily & permanent tasks at a glance</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>🔁 Goals — Habit List</strong><br/><br/>
+      <img src="screenshots/goals_habits.png" alt="Habit List" width="220"/>
+      <br/><sub>Recurring habits with 24-hour reset</sub>
+    </td>
+    <td align="center">
+      <strong>📅 History</strong><br/><br/>
+      <img src="screenshots/history.png" alt="History" width="220"/>
+      <br/><sub>Past usage, 3-day averages & scroll trends</sub>
+    </td>
+    <td align="center">
+      <strong>⚙️ Settings</strong><br/><br/>
+      <img src="screenshots/settings.png" alt="Settings" width="220"/>
+      <br/><sub>Scroll limits, biometric lock & preferences</sub>
+    </td>
+  </tr>
+</table>
+
+> 📁 Place your screenshot images in a `/screenshots` folder at the root of the repository and name them as referenced above. Recommended resolution: **1080 × 2340px** (or any standard portrait phone resolution).
+
+---
+
+## 📱 App Sections
 
 ```
 📱 Scroller's Dashboard
