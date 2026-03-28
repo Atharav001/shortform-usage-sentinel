@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -730,6 +731,8 @@ fun AlertLimitCardReplica(
     footer: String? = null,
     onDone: () -> Unit = {}
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -761,7 +764,10 @@ fun AlertLimitCardReplica(
                             onValueChange = { if (it.all { char -> char.isDigit() }) onValueChange(it) },
                             textStyle = TextStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { onDone() }),
+                            keyboardActions = KeyboardActions(onDone = { 
+                                onDone()
+                                keyboardController?.hide()
+                            }),
                             modifier = Modifier.weight(1f).background(Color(0xFF111827).copy(alpha = 0.5f), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
                             cursorBrush = SolidColor(Color.White)
                         )

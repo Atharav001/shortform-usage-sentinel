@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -333,25 +334,16 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
     val totalTimeStr = formatTotalTime(instagramTime + youtubeTime)
     
     val todayTime = instagramTime + youtubeTime
-    val last3DaysAvgTime = remember(scrollRecords) {
+    val yesterdayTime = remember(scrollRecords) {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        var total = 0L
-        var count = 0
-        for (i in 1..3) {
-            val checkCal = Calendar.getInstance()
-            checkCal.add(Calendar.DAY_OF_YEAR, -i)
-            val dStr = sdf.format(checkCal.time)
-            val dayTime = scrollRecords.filter { it.date == dStr }.sumOf { it.screenTimeMillis }
-            if (dayTime > 0) {
-                total += dayTime
-                count++
-            }
-        }
-        if (count > 0) total / count else 0L
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_YEAR, -1)
+        val yesterdayStr = sdf.format(cal.time)
+        scrollRecords.filter { it.date == yesterdayStr }.sumOf { it.screenTimeMillis }
     }
     
-    val improvement = if (last3DaysAvgTime > 0) {
-        ((todayTime - last3DaysAvgTime).toFloat() / last3DaysAvgTime * 100).toInt()
+    val improvement = if (yesterdayTime > 0) {
+        ((todayTime - yesterdayTime).toFloat() / yesterdayTime * 100).toInt()
     } else 0
 
     val streakCount = remember(scrollRecords, igLimit, ytLimit) {
@@ -448,7 +440,7 @@ fun DashboardScreen(db: AppDatabase, isDarkMode: Boolean, refreshKey: Int, onThe
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(totalTimeStr, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                         }
-                        if (last3DaysAvgTime > 0) {
+                        if (yesterdayTime > 0) {
                             val isImprovement = improvement <= 0
                             val trendColor = if (isImprovement) Green400 else Color(0xFFFF3B30)
                             val trendIcon = if (isImprovement) Icons.AutoMirrored.Filled.TrendingDown else Icons.AutoMirrored.Filled.TrendingUp
@@ -626,6 +618,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
     var selectedView by remember { mutableStateOf("habits") }
     val scope = rememberCoroutineScope()
     val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    val keyboardController = LocalSoftwareKeyboardController.current
     
     val habitTasks by db.scrollDao().getHabitTasks().collectAsState(initial = emptyList())
     
@@ -822,6 +815,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
                             db.scrollDao().insertTodo(TodoTask(title = newTaskText, date = date))
                         }
                         newTaskText = ""
+                        keyboardController?.hide()
                     }
                 }
             }
@@ -928,284 +922,6 @@ fun GoalItemRow(text: String, isCompleted: Boolean, color: Color, onToggle: () -
             )
             IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Default.Delete, null, tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}
-
-@Composable
-fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    var dailyIgLimit by remember { mutableStateOf("100") }
-    var dailyYtLimit by remember { mutableStateOf("100") }
-    var igLimit by remember { mutableStateOf("50") }
-    var ytLimit by remember { mutableStateOf("30") }
-    var trackIG by remember { mutableStateOf(true) }
-    var trackYT by remember { mutableStateOf(true) }
-    var alertOnlyAfterLimit by remember { mutableStateOf(true) }
-    var alertsEnabled by remember { mutableStateOf(true) }
-
-    var showResetIGDialog by remember { mutableStateOf(false) }
-    var showResetYTDialog by remember { mutableStateOf(false) }
-    val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
-
-    LaunchedEffect(Unit) {
-        dailyIgLimit = db.scrollDao().getSetting("limit_ig") ?: "100"
-        dailyYtLimit = db.scrollDao().getSetting("limit_yt") ?: "100"
-        igLimit = db.scrollDao().getSetting("alert_gap_ig") ?: "50"
-        ytLimit = db.scrollDao().getSetting("alert_gap_yt") ?: "30"
-        trackIG = db.scrollDao().getSetting("track_ig")?.toBoolean() ?: true
-        trackYT = db.scrollDao().getSetting("track_yt")?.toBoolean() ?: true
-        alertOnlyAfterLimit = db.scrollDao().getSetting("alert_only_after_limit")?.toBoolean() ?: true
-        alertsEnabled = db.scrollDao().getSetting("alert_screen_enabled")?.toBoolean() ?: true
-    }
-
-    if (showResetIGDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetIGDialog = false },
-            containerColor = Gray800,
-            title = { Text("Reset Instagram Count", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Reset Instagram scroll count for today?", color = Color.LightGray) },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        db.scrollDao().resetCount(todayStr, "Instagram")
-                        db.scrollDao().deleteEventsForToday(todayStr, "Instagram")
-                        Toast.makeText(context, "Instagram scroll count reset!", Toast.LENGTH_SHORT).show()
-                    }
-                    showResetIGDialog = false
-                }) { Text("Reset", color = Color.Red, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetIGDialog = false }) { Text("Cancel", color = Color.Gray) }
-            },
-            shape = RoundedCornerShape(24.dp)
-        )
-    }
-
-    if (showResetYTDialog) {
-        AlertDialog(
-            onDismissRequest = { showResetYTDialog = false },
-            containerColor = Gray800,
-            title = { Text("Reset YouTube Count", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Reset YouTube scroll count for today?", color = Color.LightGray) },
-            confirmButton = {
-                TextButton(onClick = {
-                    scope.launch {
-                        db.scrollDao().resetCount(todayStr, "YouTube")
-                        db.scrollDao().deleteEventsForToday(todayStr, "YouTube")
-                        Toast.makeText(context, "YouTube scroll count reset!", Toast.LENGTH_SHORT).show()
-                    }
-                    showResetYTDialog = false
-                }) { Text("Reset", color = Color.Red, fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showResetYTDialog = false }) { Text("Cancel", color = Color.Gray) }
-            },
-            shape = RoundedCornerShape(24.dp)
-        )
-    }
-
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(Brush.verticalGradient(listOf(Color(0xFF0F172A), Color(0xFF1F2937), Color(0xFF0F172A))))) {
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())) {
-            
-            Box(modifier = Modifier
-                .fillMaxWidth()
-                .background(Brush.horizontalGradient(listOf(Color(0xFF1F2937), Color(0xFF111827))))
-                .statusBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 24.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    var backCenter by remember { mutableStateOf(Offset.Zero) }
-                    IconButton(
-                        onClick = { 
-                            scope.launch {
-                                db.scrollDao().saveSetting(UserSetting("limit_ig", dailyIgLimit))
-                                db.scrollDao().saveSetting(UserSetting("limit_yt", dailyYtLimit))
-                                db.scrollDao().saveSetting(UserSetting("alert_gap_ig", igLimit))
-                                db.scrollDao().saveSetting(UserSetting("alert_gap_yt", ytLimit))
-                                db.scrollDao().saveSetting(UserSetting("track_ig", trackIG.toString()))
-                                db.scrollDao().saveSetting(UserSetting("track_yt", trackYT.toString()))
-                                db.scrollDao().saveSetting(UserSetting("alert_only_after_limit", alertOnlyAfterLimit.toString()))
-                                db.scrollDao().saveSetting(UserSetting("alert_screen_enabled", alertsEnabled.toString()))
-                            }
-                            onBack(backCenter) 
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF1F2937).copy(alpha = 0.5f))
-                            .onGloballyPositioned {
-                                backCenter = it.positionInWindow() + Offset(it.size.width / 2f, it.size.height / 2f)
-                            }
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
-                    Text("Settings", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Column(modifier = Modifier.padding(24.dp)) {
-                SectionTitle("Daily Scroll Limits", Icons.Default.EmojiEvents)
-                
-                AlertLimitCardReplica(
-                    title = "Instagram Daily Limit",
-                    subtitle = "Maximum reels per day",
-                    icon = Icons.Default.PhotoCamera,
-                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
-                    borderColor = Color(0xFF9333EA).copy(alpha = 0.3f),
-                    value = dailyIgLimit,
-                    onValueChange = { dailyIgLimit = it },
-                    unit = "reels",
-                    instruction = "Maximum daily limit",
-                    footer = "Your overall goal is $dailyIgLimit reels per day",
-                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("limit_ig", dailyIgLimit)) } }
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-
-                AlertLimitCardReplica(
-                    title = "YouTube Daily Limit",
-                    subtitle = "Maximum shorts per day",
-                    icon = Icons.Default.PlayArrow,
-                    gradient = SolidColor(Color(0xFFEF4444)),
-                    borderColor = Color(0xFFEF4444).copy(alpha = 0.3f),
-                    value = dailyYtLimit,
-                    onValueChange = { dailyYtLimit = it },
-                    unit = "shorts",
-                    instruction = "Maximum daily limit",
-                    footer = "Your overall goal is $dailyYtLimit shorts per day",
-                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("limit_yt", dailyYtLimit)) } }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                SectionTitle("Alert Limits", Icons.Default.Notifications)
-                
-                AlertLimitCardReplica(
-                    title = "Instagram",
-                    subtitle = "Alert frequency",
-                    icon = Icons.Default.PhotoCamera,
-                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
-                    borderColor = Color(0xFF9333EA).copy(alpha = 0.3f),
-                    value = igLimit,
-                    onValueChange = { igLimit = it },
-                    unit = "reels",
-                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("alert_gap_ig", igLimit)) } }
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-
-                AlertLimitCardReplica(
-                    title = "YouTube",
-                    subtitle = "Alert frequency",
-                    icon = Icons.Default.PlayArrow,
-                    gradient = SolidColor(Color(0xFFEF4444)),
-                    borderColor = Color(0xFFEF4444).copy(alpha = 0.3f),
-                    value = ytLimit,
-                    onValueChange = { ytLimit = it },
-                    unit = "shorts",
-                    onDone = { scope.launch { db.scrollDao().saveSetting(UserSetting("alert_gap_yt", ytLimit)) } }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                SectionTitle("Alert Behavior", Icons.Default.Timer)
-
-                TrackingControlCardReplica(
-                    title = "Enable Alerts",
-                    isTracking = alertsEnabled,
-                    onToggle = { alertsEnabled = !alertsEnabled },
-                    gradient = Brush.linearGradient(listOf(Color(0xFF10B981), Color(0xFF059669))),
-                    icon = Icons.Default.Notifications
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                TrackingControlCardReplica(
-                    title = "Strict Mode",
-                    isTracking = alertOnlyAfterLimit,
-                    onToggle = { alertOnlyAfterLimit = !alertOnlyAfterLimit },
-                    gradient = Brush.linearGradient(listOf(Color(0xFF3B82F6), Color(0xFF2563EB))),
-                    icon = Icons.Default.Lock
-                )
-                Text(
-                    text = if (alertOnlyAfterLimit) "Alerts will only appear after daily limit is reached." else "Alerts will appear regularly based on alert frequency, even before the daily limit.",
-                    color = Color.Gray,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 8.dp, start = 16.dp, end = 16.dp)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                SectionTitle("Tracking Control", Icons.Default.Dns)
-
-                TrackingControlCardReplica(
-                    title = "Instagram Tracking",
-                    isTracking = trackIG,
-                    onToggle = { trackIG = !trackIG },
-                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
-                    icon = Icons.Default.PhotoCamera
-                )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-
-                TrackingControlCardReplica(
-                    title = "YouTube Tracking",
-                    isTracking = trackYT,
-                    onToggle = { trackYT = !trackYT },
-                    gradient = SolidColor(Color(0xFFEF4444)),
-                    icon = Icons.Default.PlayArrow
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                SectionTitle("Reset Today's Data", Icons.AutoMirrored.Filled.RotateLeft)
-
-                ResetDataCardReplica(
-                    title = "Reset Instagram",
-                    description = "Clear today's scroll count",
-                    gradient = Brush.linearGradient(listOf(Color(0xFF9333EA), Color(0xFFDB2777))),
-                    icon = Icons.Default.PhotoCamera,
-                    onReset = { showResetIGDialog = true },
-                    accentColor = Color(0xFF9333EA)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                ResetDataCardReplica(
-                    title = "Reset YouTube",
-                    description = "Clear today's scroll count",
-                    gradient = SolidColor(Color(0xFFEF4444)),
-                    icon = Icons.Default.PlayArrow,
-                    onReset = { showResetYTDialog = true },
-                    accentColor = Color(0xFFEF4444)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF3B82F6).copy(alpha = 0.1f))
-                        .border(1.dp, Color(0xFF3B82F6).copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "Note: Reset only clears today's data. Historical data in Activity Analysis and History sections remains unchanged.",
-                        color = Color(0xFF93C5FD),
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(100.dp))
             }
         }
     }

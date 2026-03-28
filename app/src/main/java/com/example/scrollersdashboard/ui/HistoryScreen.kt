@@ -286,7 +286,11 @@ fun HistoryOverviewView(allRecords: List<ScrollRecord>, allEvents: List<ScrollEv
                 val combinedScrolls = dayRecs.sumOf { it.scrollCount }
                 combinedScrolls <= combinedLimit
             }
-            val totalDaysInMonth = recordsByDate.size
+            
+            // Get actual total days in this specific month
+            val calForMonth = Calendar.getInstance()
+            calForMonth.time = monthFormat.parse(month)!!
+            val totalDaysInMonth = calForMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
             
             HistoryMonthlySummary(
                 month = month,

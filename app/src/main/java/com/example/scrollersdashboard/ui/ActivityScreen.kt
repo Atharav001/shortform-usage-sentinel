@@ -154,12 +154,11 @@ fun ActivityScreen(
             val hasActivity = totalScrolls > 0
             val isFuture = cal.timeInMillis > System.currentTimeMillis()
             
-            // Only show red or green sign when the scroll count was counted (hasActivity)
-            // This naturally handles the "before installation" logic as there would be no counts.
+            // Marks green when total scrolls are below combined limit, red otherwise
             val underLimit = when {
                 isFuture -> null
                 !hasActivity -> null
-                else -> (ig <= igLimit && yt <= ytLimit)
+                else -> totalScrolls <= (igLimit + ytLimit)
             }
             
             val day = CalendarDay(i + 1, underLimit)

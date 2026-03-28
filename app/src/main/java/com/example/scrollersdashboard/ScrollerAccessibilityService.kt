@@ -95,8 +95,18 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
             val stats = usageStatsManager.queryAndAggregateUsageStats(startOfDay, endOfDay)
             
-            val igTime = stats["com.instagram.android"]?.totalTimeInForeground ?: 0L
-            val ytTime = stats["com.google.android.youtube"]?.totalTimeInForeground ?: 0L
+            var igTime = 0L
+            var ytTime = 0L
+
+            stats.forEach { (pkg, usage) ->
+                val p = pkg.lowercase()
+                if (p.contains("instagram")) {
+                    igTime += usage.totalTimeInForeground
+                } else if (p.contains("youtube") && p != packageName.lowercase()) {
+                    // Include all YouTube mods but exclude our own app
+                    ytTime += usage.totalTimeInForeground
+                }
+            }
 
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             
@@ -134,7 +144,7 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 lastForegroundApp = packageName
                 val appType = when {
                     packageName.contains("instagram") -> "Instagram"
-                    packageName.contains("youtube") -> "YouTube"
+                    packageName.contains("youtube") && packageName != this.packageName.lowercase() -> "YouTube"
                     else -> null
                 }
                 if (appType != null) {
@@ -151,7 +161,7 @@ class ScrollerAccessibilityService : AccessibilityService() {
                     recordScrollBuffered("Instagram")
                 }
             }
-            packageName.contains("youtube") -> {
+            packageName.contains("youtube") && packageName != this.packageName.lowercase() -> {
                 youtubeTracker.processEvent(event, screenHeight) {
                     recordScrollBuffered("YouTube")
                 }
