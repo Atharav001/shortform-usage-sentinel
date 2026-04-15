@@ -29,6 +29,9 @@ Scroller's Dashboard does.
 
 ---
 
+<img width="1286" height="864" alt="image" src="https://github.com/user-attachments/assets/5f754363-68e8-4a80-bad7-15cd046fe939" />
+
+
 ## ⚙️ How It Works
 
 ### 1. The Core Engine — Precision Tracking
