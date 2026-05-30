@@ -3,24 +3,21 @@ package com.example.scrollersdashboard.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.scrollersdashboard.ui.theme.CardBackground
+import com.example.scrollersdashboard.ui.theme.GlassBorder
 
 // --- UI Constants ---
 val SharpRoundedCorner = 28.dp // M3 ExtraLarge standard
 
-// Base Colors (Can be used as fallbacks if not using MaterialTheme directly)
-val DeepCharcoal = Color(0xFF18181B) 
+// Element Base Colors (Legacy fallbacks - moved DeepCharcoal to Color.kt)
 val LightGrey = Color(0xFFE0E0E5)
-
-// Element Base Colors
 val ElementDark = Color(0xFF18181B)
 val ElementLight = Color(0xFFE0E0E5)
-
 val GlassColor = Color(0xFF1A1A1E)
 
 // Neon Gradients
@@ -36,10 +33,10 @@ val ToggleTrackOff = Color(0xFF333333)
 fun Modifier.modernGlassy(isDarkMode: Boolean): Modifier = this.then(
     Modifier
         .clip(RoundedCornerShape(28.dp))
-        .background(if (isDarkMode) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.03f))
+        .background(CardBackground)
         .border(
             1.dp,
-            if (isDarkMode) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.05f),
+            GlassBorder,
             RoundedCornerShape(28.dp)
         )
 )

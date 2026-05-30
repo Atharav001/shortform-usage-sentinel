@@ -28,6 +28,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.scrollersdashboard.*
+import com.example.scrollersdashboard.ui.theme.BlueGradient
+import com.example.scrollersdashboard.ui.theme.EmeraldGradient
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -119,9 +121,10 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 items(todoTasks, key = { it.id }) { task ->
-                                    PanelTaskRow(
+                                    SwipeableGoalListItem(
                                         title = task.title,
                                         isCompleted = task.isCompleted,
+                                        accentGradient = Brush.linearGradient(BlueGradient),
                                         onToggle = {
                                             scope.launch { db.scrollDao().insertTodo(task.copy(isCompleted = !task.isCompleted)) }
                                         },
@@ -155,9 +158,10 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                             ) {
                                 items(habitTasks, key = { it.id }) { habit ->
                                     val isCompletedToday = habit.lastCompletedDate == today
-                                    PanelTaskRow(
+                                    SwipeableGoalListItem(
                                         title = habit.title,
                                         isCompleted = isCompletedToday,
+                                        accentGradient = Brush.linearGradient(EmeraldGradient),
                                         onToggle = {
                                             scope.launch {
                                                 db.scrollDao().insertHabit(habit.copy(lastCompletedDate = if (isCompletedToday) "" else today))
@@ -221,23 +225,11 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                         }
                     }
                     Spacer(modifier = Modifier.height(20.dp))
-                    OutlinedTextField(
+                    GlassGoalsInputRow(
                         value = newTaskTitle,
                         onValueChange = { newTaskTitle = it },
-                        placeholder = { Text("Enter title...", color = Color.White.copy(alpha = 0.3f)) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color(0xFF9333EA),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            cursorColor = Color(0xFF9333EA)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    PremiumScalingButton(
-                        onClick = {
+                        placeholder = "Enter title...",
+                        onAdd = {
                             if (newTaskTitle.isNotBlank()) {
                                 scope.launch {
                                     if (dialogType == "todo") {
@@ -249,13 +241,8 @@ fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
                                     showAddOverlay = false
                                 }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        isDarkMode = true,
-                        cornerRadius = 16.dp
-                    ) {
-                        Text("Add", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                    }
+                        }
+                    )
                 }
             }
         }
@@ -289,60 +276,3 @@ fun PanelSection(title: String, onAdd: () -> Unit, content: @Composable () -> Un
     }
 }
 
-@Composable
-fun PanelTaskRow(
-    title: String,
-    isCompleted: Boolean,
-    onToggle: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
-            .clickable { onToggle() }
-            .padding(14.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .border(
-                        BorderStroke(
-                            2.dp,
-                            if (isCompleted) Color(0xFF9333EA) else Color.White.copy(alpha = 0.3f)
-                        ),
-                        CircleShape
-                    )
-                    .background(
-                        if (isCompleted) Color(0xFF9333EA).copy(alpha = 0.2f) else Color.Transparent,
-                        CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isCompleted) {
-                    Icon(Icons.Default.Check, null, tint = Color(0xFF9333EA), modifier = Modifier.size(16.dp))
-                }
-            }
-            
-            Spacer(modifier = Modifier.width(14.dp))
-            
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                color = if (isCompleted) Color.White.copy(alpha = 0.4f) else Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
-                textDecoration = if (isCompleted) TextDecoration.LineThrough else null
-            )
-
-            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.Delete, null, tint = Color.White.copy(alpha = 0.2f), modifier = Modifier.size(18.dp))
-            }
-        }
-    }
-}

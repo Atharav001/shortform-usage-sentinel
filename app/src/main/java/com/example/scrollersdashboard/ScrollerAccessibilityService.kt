@@ -4,10 +4,13 @@ import android.accessibilityservice.AccessibilityService
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.usage.UsageStatsManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
-import android.os.Bundle
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
@@ -16,6 +19,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -24,11 +28,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.lifecycle.*
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.savedstate.SavedStateRegistry
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -47,16 +49,36 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
     private val pendingCounts = mutableMapOf<String, Int>()
     private var flushJob: Job? = null
-    private val BATCH_SIZE = 3 
+    private val BATCH_SIZE = 2 
 
     private val lastAlertedCount = mutableMapOf<String, Int>()
     private var lastAlertDate: String? = null
     private var lastForegroundApp: String? = null
+    private var lastIgYtPackage: String? = null
 
     private val instagramTracker = InstagramTracker()
     private val youtubeTracker = YouTubeTracker()
 
     private var syncJob: Job? = null
+    private var isOverlayVisible = false
+    private var inReelsOrShorts = false
+    private var overlayContextJob: Job? = null
+    private var lastOverlayAppType: String? = null
+    private var mediaPausedByOverlay = false
+
+    private val mediaControlReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_PAUSE_MEDIA -> mediaPausedByOverlay = tryMediaControl(pause = true)
+                ACTION_RESUME_MEDIA -> {
+                    if (mediaPausedByOverlay) {
+                        tryMediaControl(pause = false)
+                        mediaPausedByOverlay = false
+                    }
+                }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -70,6 +92,62 @@ class ScrollerAccessibilityService : AccessibilityService() {
         Log.d(TAG, "Service Connected and Ready")
         
         startScreenTimeSync()
+        observeOverlaySetting()
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            mediaControlReceiver,
+            IntentFilter().apply {
+                addAction(ACTION_PAUSE_MEDIA)
+                addAction(ACTION_RESUME_MEDIA)
+            }
+        )
+    }
+
+    private fun tryMediaControl(pause: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        return try {
+            val keywords = if (pause) {
+                listOf("pause", "paused", "tap to pause", "pause video")
+            } else {
+                listOf("play", "resume", "tap to play", "play video")
+            }
+            val target = findMediaControlNode(root, keywords)
+            val clicked = target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+            target?.recycle()
+            clicked
+        } finally {
+            root.recycle()
+        }
+    }
+
+    private fun findMediaControlNode(
+        node: AccessibilityNodeInfo,
+        keywords: List<String>
+    ): AccessibilityNodeInfo? {
+        val desc = node.contentDescription?.toString()?.lowercase(Locale.getDefault()) ?: ""
+        val text = node.text?.toString()?.lowercase(Locale.getDefault()) ?: ""
+        val id = node.viewIdResourceName?.lowercase(Locale.getDefault()) ?: ""
+        if (node.isClickable && keywords.any { k -> desc.contains(k) || text.contains(k) || id.contains(k) }) {
+            return AccessibilityNodeInfo.obtain(node)
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findMediaControlNode(child, keywords)
+            child.recycle()
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun observeOverlaySetting() {
+        serviceScope.launch {
+            db.scrollDao().getSettingFlow("overlay_counter_enabled").collectLatest { enabled ->
+                val isEnabled = enabled?.toBoolean() ?: false
+                if (!isEnabled) {
+                    stopCounterOverlay()
+                }
+            }
+        }
     }
 
     private fun startScreenTimeSync() {
@@ -103,7 +181,6 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 if (p.contains("instagram")) {
                     igTime += usage.totalTimeInForeground
                 } else if (p.contains("youtube") && p != packageName.lowercase()) {
-                    // Include all YouTube mods but exclude our own app
                     ytTime += usage.totalTimeInForeground
                 }
             }
@@ -132,24 +209,30 @@ class ScrollerAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         val packageName = event.packageName?.toString()?.lowercase() ?: return
         
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            if (packageName.contains("launcher") || packageName.contains("systemui")) {
-                serviceScope.launch(Dispatchers.Main) {
-                    removeOverlay()
-                }
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || 
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            
+            val appType = when {
+                packageName.contains("instagram") -> "Instagram"
+                packageName.contains("youtube") && packageName != this.packageName.lowercase() -> "YouTube"
+                else -> null
             }
-            serviceScope.launch { syncScreenTimeWithSystem() }
 
-            if (packageName != lastForegroundApp) {
+            if (appType != null) {
+                lastIgYtPackage = packageName
                 lastForegroundApp = packageName
-                val appType = when {
-                    packageName.contains("instagram") -> "Instagram"
-                    packageName.contains("youtube") && packageName != this.packageName.lowercase() -> "YouTube"
-                    else -> null
+                checkContextualOverlay(appType)
+            } else if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                val leftIgYt = lastIgYtPackage != null &&
+                    !packageName.contains("instagram") &&
+                    !(packageName.contains("youtube") && packageName != this.packageName.lowercase())
+                if (leftIgYt && (isOverlayVisible || inReelsOrShorts)) {
+                    inReelsOrShorts = false
+                    lastOverlayAppType = null
+                    lastIgYtPackage = null
+                    stopCounterOverlay(immediate = true)
                 }
-                if (appType != null) {
-                    resetAlertTimerOnAppOpen(appType)
-                }
+                lastForegroundApp = packageName
             }
         }
 
@@ -167,6 +250,156 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    private fun checkContextualOverlay(appType: String) {
+        overlayContextJob?.cancel()
+        overlayContextJob = serviceScope.launch {
+            delay(120)
+            val root = rootInActiveWindow
+            if (root == null) return@launch
+            val screenHeight = getScreenHeight()
+            val isInShortsView = try {
+                isSpecificallyInShortsOrReels(root, appType, screenHeight)
+            } finally {
+                root.recycle()
+            }
+
+            withContext(Dispatchers.Main) {
+                if (isInShortsView) {
+                    lastOverlayAppType = appType
+                    if (!inReelsOrShorts) {
+                        inReelsOrShorts = true
+                        triggerOverlayForApp(appType)
+                    } else {
+                        refreshOverlayForApp(appType)
+                    }
+                } else if (inReelsOrShorts && lastOverlayAppType == appType) {
+                    inReelsOrShorts = false
+                    lastOverlayAppType = null
+                    stopCounterOverlay()
+                }
+            }
+        }
+    }
+
+    private fun isSpecificallyInShortsOrReels(node: AccessibilityNodeInfo?, appType: String, screenHeight: Int): Boolean {
+        if (node == null) return false
+
+        val viewId = node.viewIdResourceName?.lowercase(Locale.getDefault())
+        val className = node.className?.toString()?.lowercase(Locale.getDefault()) ?: ""
+        val contentDesc = node.contentDescription?.toString()?.lowercase(Locale.getDefault()) ?: ""
+        val text = node.text?.toString()?.lowercase(Locale.getDefault()) ?: ""
+
+        if (appType == "Instagram") {
+            if (viewId != null && (
+                    viewId.contains("reel") ||
+                        viewId.contains("clips") ||
+                        viewId.contains("clipping_frame")
+                    )
+            ) {
+                return true
+            }
+            if (contentDesc.contains("reel") || text.contains("reel")) return true
+        } else if (appType == "YouTube") {
+            if (viewId != null && (
+                    viewId.contains("reel") ||
+                        viewId.contains("short") ||
+                        viewId.contains("shorts") ||
+                        viewId.contains("player")
+                    )
+            ) {
+                return true
+            }
+            if (contentDesc.contains("short") || text.contains("short")) return true
+        }
+
+        val rect = Rect()
+        node.getBoundsInScreen(rect)
+        if (node.isScrollable && rect.height() > screenHeight * 0.70f && rect.width() > screenHeight * 0.5f) {
+            if (rect.top <= screenHeight * 0.12f) return true
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = isSpecificallyInShortsOrReels(child, appType, screenHeight)
+            child.recycle()
+            if (found) return true
+        }
+
+        return false
+    }
+
+    private fun triggerOverlayForApp(appType: String) {
+        serviceScope.launch {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val dao = db.scrollDao()
+            val isEnabled = dao.getSetting("overlay_counter_enabled")?.toBoolean() ?: false
+            if (!isEnabled) return@launch
+
+            val record = dao.getRecord(today, appType)
+            val count = record?.scrollCount ?: 0
+            val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
+            val limit = dao.getSetting(limitKey)?.toIntOrNull() ?: 100
+
+            withContext(Dispatchers.Main) {
+                startCounterOverlay(count, limit, appType)
+            }
+        }
+    }
+
+    private fun refreshOverlayForApp(appType: String) {
+        if (!isOverlayVisible) {
+            triggerOverlayForApp(appType)
+            return
+        }
+        serviceScope.launch {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val dao = db.scrollDao()
+            val record = dao.getRecord(today, appType)
+            val count = record?.scrollCount ?: 0
+            val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
+            val limit = dao.getSetting(limitKey)?.toIntOrNull() ?: 100
+            broadcastCount(count, limit, appType)
+        }
+    }
+
+    private fun startCounterOverlay(initialCount: Int, limit: Int, appName: String) {
+        val intent = Intent(this, CounterOverlayService::class.java).apply {
+            action = CounterOverlayService.ACTION_SHOW_OVERLAY
+            putExtra(CounterOverlayService.EXTRA_COUNT, initialCount)
+            putExtra(CounterOverlayService.EXTRA_LIMIT, limit)
+            putExtra(CounterOverlayService.EXTRA_APP_NAME, appName)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+        isOverlayVisible = true
+    }
+
+    private fun stopCounterOverlay(immediate: Boolean = false) {
+        if (!isOverlayVisible) return
+        isOverlayVisible = false
+        val intent = Intent(this, CounterOverlayService::class.java).apply {
+            action = CounterOverlayService.ACTION_HIDE_OVERLAY
+            putExtra(CounterOverlayService.EXTRA_HIDE_IMMEDIATE, immediate)
+        }
+        try {
+            startService(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "stopCounterOverlay: ${e.message}")
+        }
+    }
+
+    private fun broadcastCount(count: Int, limit: Int, appName: String) {
+        val intent = Intent(CounterOverlayService.ACTION_UPDATE_COUNT).apply {
+            putExtra(CounterOverlayService.EXTRA_COUNT, count)
+            putExtra(CounterOverlayService.EXTRA_LIMIT, limit)
+            putExtra(CounterOverlayService.EXTRA_APP_NAME, appName)
+        }
+        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -208,19 +441,36 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
             synchronized(pendingCounts) {
                 val current = pendingCounts[appType] ?: 0
-                pendingCounts[appType] = current + 1
-                
-                if (pendingCounts[appType]!! >= BATCH_SIZE) {
+                val updatedPending = current + 1
+                pendingCounts[appType] = updatedPending
+
+                if (isOverlayVisible) {
+                    broadcastOptimisticCount(appType)
+                    flushBuffer()
+                } else if (updatedPending >= BATCH_SIZE) {
                     flushBuffer()
                 } else {
                     if (flushJob == null || flushJob?.isCompleted == true) {
                         flushJob = serviceScope.launch {
-                            delay(3000) 
+                            delay(2000)
                             flushBuffer()
                         }
                     }
                 }
             }
+        }
+    }
+
+    private fun broadcastOptimisticCount(appType: String) {
+        serviceScope.launch {
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val dao = db.scrollDao()
+            val record = dao.getRecord(today, appType)
+            val pending = synchronized(pendingCounts) { pendingCounts[appType] ?: 0 }
+            val count = (record?.scrollCount ?: 0) + pending
+            val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
+            val limit = dao.getSetting(limitKey)?.toIntOrNull() ?: 100
+            broadcastCount(count, limit, appType)
         }
     }
 
@@ -249,7 +499,10 @@ class ScrollerAccessibilityService : AccessibilityService() {
                 val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
                 val limitValue = dao.getSetting(limitKey)
                 val limit = limitValue?.toIntOrNull() ?: 100
-                
+
+                if (isOverlayVisible) {
+                    broadcastCount(newCount, limit, appType)
+                }
                 handleAlerts(appType, newCount, today, limit)
             }
         }
@@ -293,32 +546,6 @@ class ScrollerAccessibilityService : AccessibilityService() {
             if (shouldShow) {
                 withContext(Dispatchers.Main) {
                     showLimitReachedOverlay(appType)
-                }
-            }
-        }
-    }
-
-    private fun resetAlertTimerOnAppOpen(appType: String) {
-        serviceScope.launch {
-            val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            val dao = db.scrollDao()
-            val record = dao.getRecord(today, appType)
-            val currentCount = record?.scrollCount ?: 0
-            
-            val alertOnlyAfterLimit = dao.getSetting("alert_only_after_limit")?.toBoolean() ?: true
-            val limitKey = if (appType == "Instagram") "limit_ig" else "limit_yt"
-            val limitValue = dao.getSetting(limitKey)
-            val limit = limitValue?.toIntOrNull() ?: 100
-            
-            if (currentCount >= limit || !alertOnlyAfterLimit) {
-                synchronized(lastAlertedCount) {
-                    if (lastAlertDate != today) {
-                        lastAlertedCount.clear()
-                        lastAlertDate = today
-                    }
-                    if (!lastAlertedCount.containsKey(appType)) {
-                        lastAlertedCount[appType] = currentCount
-                    }
                 }
             }
         }
@@ -369,6 +596,12 @@ class ScrollerAccessibilityService : AccessibilityService() {
         val tvStats = view.findViewById<TextView>(R.id.tvStats)
         val tvLimit = view.findViewById<TextView>(R.id.tvLimit)
         
+        // Sections & Tabs
+        val habitsSection = view.findViewById<View>(R.id.habitsSection)
+        val tasksSection = view.findViewById<View>(R.id.tasksSection)
+        val tabHabits = view.findViewById<TextView>(R.id.tabHabits)
+        val tabTasks = view.findViewById<TextView>(R.id.tabTasks)
+
         val rvHabits = view.findViewById<RecyclerView>(R.id.rvHabits)
         val rvTasks = view.findViewById<RecyclerView>(R.id.rvTasks)
         val pbHabits = view.findViewById<ProgressBar>(R.id.pbHabits)
@@ -388,6 +621,24 @@ class ScrollerAccessibilityService : AccessibilityService() {
             headerContainer.setBackgroundResource(R.drawable.bg_alert_header_instagram)
         } else {
             headerContainer.setBackgroundResource(R.drawable.bg_alert_header_youtube)
+        }
+
+        tabHabits.setOnClickListener {
+            habitsSection.visibility = View.VISIBLE
+            tasksSection.visibility = View.GONE
+            tabHabits.setBackgroundResource(R.drawable.bg_tab_selected)
+            tabHabits.setTextColor(themedContext.getColor(R.color.white))
+            tabTasks.background = null
+            tabTasks.setTextColor(themedContext.getColor(R.color.gray_500))
+        }
+
+        tabTasks.setOnClickListener {
+            habitsSection.visibility = View.GONE
+            tasksSection.visibility = View.VISIBLE
+            tabTasks.setBackgroundResource(R.drawable.bg_tab_selected)
+            tabTasks.setTextColor(themedContext.getColor(R.color.white))
+            tabHabits.background = null
+            tabHabits.setTextColor(themedContext.getColor(R.color.gray_500))
         }
 
         val habitsAdapter = TaskAdapter(emptyList(), 
@@ -417,13 +668,13 @@ class ScrollerAccessibilityService : AccessibilityService() {
             val limitValue = withContext(Dispatchers.IO) { dao.getSetting(limitKey) }
             val limit = limitValue?.toIntOrNull() ?: 100
             
-            tvStats.text = "You've scrolled ${record?.scrollCount ?: 0} ${if (appType == "Instagram") "reels" else "shorts"}"
+            tvStats.text = "${record?.scrollCount ?: 0} ${if (appType == "Instagram") "reels" else "shorts"} scrolled"
             tvLimit.text = limit.toString()
 
             launch {
                 dao.getHabitTasks().collect { habits ->
                     val completed = habits.count { it.lastCompletedDate == today }
-                    tvHabitsCount.text = "$completed/${habits.size}"
+                    tvHabitsCount.text = "$completed/${habits.size} completed"
                     pbHabits.progress = if (habits.isNotEmpty()) (completed * 100 / habits.size) else 0
                     habitsAdapter.updateTasks(habits)
                 }
@@ -436,7 +687,7 @@ class ScrollerAccessibilityService : AccessibilityService() {
                     
                     dao.getTodoTasks(todoDate).collect { tasks ->
                         val completed = tasks.count { it.isCompleted }
-                        tvTasksCount.text = "$completed/${tasks.size}"
+                        tvTasksCount.text = "$completed/${tasks.size} completed"
                         pbTasks.progress = if (tasks.isNotEmpty()) (completed * 100 / tasks.size) else 0
                         tasksAdapter.updateTasks(tasks)
                     }
@@ -526,28 +777,19 @@ class ScrollerAccessibilityService : AccessibilityService() {
     }
     
     override fun onDestroy() {
+        try {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(mediaControlReceiver)
+        } catch (_: Exception) {}
         syncJob?.cancel()
         serviceScope.cancel()
         flushBuffer()
         removeOverlay()
+        stopCounterOverlay()
         super.onDestroy()
     }
 
-    private class OverlayLifecycleOwner : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
-        private val lifecycleRegistry = LifecycleRegistry(this)
-        private val savedStateRegistryController = SavedStateRegistryController.create(this)
-        private val store = ViewModelStore()
-
-        override val lifecycle: Lifecycle get() = lifecycleRegistry
-        override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
-        override val viewModelStore: ViewModelStore get() = store
-
-        fun performRestore(savedState: Bundle?) {
-            savedStateRegistryController.performRestore(savedState)
-        }
-
-        fun handleLifecycleEvent(event: Lifecycle.Event) {
-            lifecycleRegistry.handleLifecycleEvent(event)
-        }
+    companion object {
+        const val ACTION_PAUSE_MEDIA = "com.example.scrollersdashboard.PAUSE_MEDIA"
+        const val ACTION_RESUME_MEDIA = "com.example.scrollersdashboard.RESUME_MEDIA"
     }
 }

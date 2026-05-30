@@ -1,6 +1,5 @@
 package com.example.scrollersdashboard.ui
 
-import androidx.compose.animation.animateColor
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -8,76 +7,184 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.scrollersdashboard.ui.theme.*
 import kotlin.random.Random
 
-// --- Premium Glassmorphism UI Components ---
+@Composable
+fun SectionTitle(title: String, icon: ImageVector) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 16.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(CobaltPremium.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = CobaltPremium,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = title.uppercase(),
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
+        )
+    }
+}
+
+@Composable
+fun AlertLimitCardReplica(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    gradient: Brush,
+    borderColor: Color,
+    value: String,
+    onValueChange: (String) -> Unit,
+    unit: String,
+    instruction: String,
+    footer: String,
+    onDone: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(CardBackground)
+            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+            .padding(20.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(gradient),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text(title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                    Text(subtitle, color = Gray400, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Black.copy(alpha = 0.2f))
+                    .border(1.dp, GlassBorder, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(instruction.uppercase(), color = Gray500, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    BasicTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 24.sp,
+                            fontFamily = FontFamily.SansSerif
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { onDone() }
+                        ),
+                        cursorBrush = Brush.verticalGradient(listOf(Color.White, Color.White))
+                    )
+                }
+                Text(unit.uppercase(), color = Gray400, fontSize = 12.sp, fontWeight = FontWeight.Black)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(footer, color = Gray500, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = EmeraldPremium.copy(alpha = 0.6f),
+                    modifier = Modifier.size(16.dp).clickable { onDone() }
+                )
+            }
+        }
+    }
+}
 
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 24.dp,
+    depth: GlassDepthLevel = GlassDepthLevel.Mid,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(cornerRadius))
+    GlassmorphicCard(
+        modifier = modifier.fillMaxWidth(),
+        depth = depth,
+        style = GlassStyle.Plain,
+        cornerRadius = cornerRadius,
+        padding = PaddingValues(24.dp)
     ) {
-        // Separate background layer for blur to keep content sharp
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(Color(0xFF1F2937).copy(alpha = 0.3f))
-                .blur(radius = 15.dp) // The "Liquid" blur effect
-                .border(
-                    width = 1.dp,
-                    color = Color(0xFF374151),
-                    shape = RoundedCornerShape(cornerRadius)
-                )
-        )
-        
-        Column(
-            modifier = Modifier.padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             content()
         }
     }
@@ -90,61 +197,83 @@ fun UsageCard(
     scrollCount: Int,
     percentage: Int,
     dailyGoal: Int,
+    isDarkMode: Boolean,
+    totalScrollsForGlow: Int = scrollCount
+) {
+    val platformLabel = platform.replaceFirstChar { it.uppercase() }
+
+    GlassmorphicCard(
+        modifier = Modifier.fillMaxWidth(),
+        depth = GlassDepthLevel.Mid,
+        style = GlassStyle.Plain,
+        cornerRadius = 24.dp,
+        padding = PaddingValues(16.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            UsageProgressRing(
+                platform = platform,
+                scrollCount = scrollCount,
+                dailyGoal = dailyGoal,
+                screenTime = screenTime
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                platformLabel,
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+
+            Text(
+                screenTime,
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+fun MetricCard(
+    platform: String,
+    scrollCount: Int,
+    dailyGoal: Int,
+    screenTime: String,
+    gradient: List<Color>,
     isDarkMode: Boolean
 ) {
-    val gradient = if (platform.lowercase() == "instagram") {
-        listOf(Color(0xFFC13584), Color(0xFFE1306C), Color(0xFFFF8C00))
-    } else {
-        listOf(Color(0xFFFF0000), Color(0xFFFF4D4D))
-    }
-    
+    val percentage = (scrollCount.toFloat() / dailyGoal * 100).coerceAtMost(100f)
     val animatedPercentage by animateFloatAsState(
-        targetValue = percentage.toFloat(),
-        animationSpec = tween(1000, easing = FastOutSlowInEasing),
-        label = "percentage"
+        targetValue = percentage,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 150f),
+        label = "MetricProgress"
     )
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(32.dp))
-            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
-            .border(1.dp, Color(0xFF374151), RoundedCornerShape(32.dp))
-            .padding(16.dp)
+            .liquidGlassCard(isDarkMode)
+            .padding(20.dp)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(130.dp)) {
-                // The dark inner circle background
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF0A0A0C))
-                )
-                
-                // Progress Ring
-                Canvas(modifier = Modifier.size(120.dp)) {
-                    val strokeWidth = 14.dp.toPx()
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val strokeWidth = 10.dp.toPx()
                     val radius = (size.width - strokeWidth) / 2
                     
-                    // Track
+                    // Background Track
                     drawCircle(
                         color = Color.White.copy(alpha = 0.05f),
                         radius = radius,
                         style = Stroke(width = strokeWidth)
                     )
-                    
-                    // Progress Arc
+
+                    // Progress
                     drawArc(
-                        brush = if (gradient.size > 1) {
-                            Brush.sweepGradient(
-                                0.0f to gradient[0],
-                                0.5f to gradient[1],
-                                1.0f to gradient.last()
-                            )
-                        } else {
-                            SolidColor(gradient[0])
-                        },
+                        brush = Brush.linearGradient(gradient),
                         startAngle = -90f,
                         sweepAngle = 360f * (animatedPercentage / 100f),
                         useCenter = false,
@@ -152,37 +281,35 @@ fun UsageCard(
                     )
                 }
                 
-                // Text inside the ring
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = scrollCount.toString(),
                         color = Color.White,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Black,
-                        lineHeight = 28.sp
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Black
                     )
                     Text(
                         text = "/$dailyGoal",
-                        color = Color.Gray,
-                        fontSize = 12.sp,
+                        color = Gray500,
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             Text(
                 platform.replaceFirstChar { it.uppercase() },
                 color = Color.White,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.ExtraBold
             )
             
             Text(
                 screenTime,
-                color = Gray500,
-                fontSize = 11.sp,
+                color = Gray400,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -193,52 +320,31 @@ fun Modifier.liquidGlassCard(
     isDarkMode: Boolean,
     cornerRadius: Dp = 28.dp,
     elevation: Dp = 1.5.dp,
-    alpha: Float = 0.08f
+    alpha: Float = 0.15f
 ): Modifier = this.then(
     Modifier
-        .drawBehind {
-            val drawSize = this.size
-            val shadowColor = if (isDarkMode) Color.Black.copy(alpha = 0.5f) else Color(0xFFA3B1C6).copy(alpha = 0.25f)
-            
-            // Outer soft glow/shadow for depth
-            drawRoundRect(
-                color = shadowColor,
-                topLeft = Offset(elevation.toPx(), elevation.toPx() * 1.5f),
-                size = drawSize,
-                cornerRadius = CornerRadius(cornerRadius.toPx()),
-                style = Stroke(width = 2.dp.toPx())
-            )
-        }
         .clip(RoundedCornerShape(cornerRadius))
         .background(
             brush = Brush.verticalGradient(
-                colors = if (isDarkMode) {
-                    listOf(
-                        Color(0xFFFFFFFF).copy(alpha = alpha),
-                        Color(0xFFFFFFFF).copy(alpha = alpha * 0.4f),
-                        Color(0xFF000000).copy(alpha = 0.05f)
-                    )
-                } else {
-                    listOf(
-                        Color.White.copy(alpha = 0.85f),
-                        Color(0xFFF0F0F3).copy(alpha = 0.6f)
-                    )
-                }
+                colors = listOf(
+                    Color.White.copy(alpha = alpha),
+                    Color.White.copy(alpha = alpha * 0.4f),
+                    Color.Black.copy(alpha = 0.1f)
+                )
             )
         )
         .drawWithCache {
             val borderBrush = Brush.linearGradient(
                 colors = listOf(
-                    Color.White.copy(alpha = if (isDarkMode) 0.25f else 0.9f), // Strong top-left highlight
+                    Color.White.copy(alpha = 0.15f),
                     Color.White.copy(alpha = 0.02f),
-                    Color.White.copy(alpha = if (isDarkMode) 0.05f else 0.2f)
+                    Color.White.copy(alpha = 0.08f)
                 ),
                 start = Offset(0f, 0f),
                 end = Offset(size.width, size.height)
             )
             onDrawWithContent {
                 drawContent()
-                // The "Glass" border
                 drawRoundRect(
                     brush = borderBrush,
                     cornerRadius = CornerRadius(cornerRadius.toPx()),
@@ -250,88 +356,54 @@ fun Modifier.liquidGlassCard(
 
 fun Modifier.marbleBackground(): Modifier = this.then(
     Modifier.drawBehind {
-        val drawSize = this.size
-        // Deep obsidian designer background
-        drawRect(Color(0xFF08080A))
-        
-        val random = Random(123)
-        // Elegant marble veins - long and flowing
-        repeat(12) {
-            val startX = random.nextFloat() * drawSize.width
-            val startY = random.nextFloat() * drawSize.height
-            val endX = startX + (random.nextFloat() - 0.5f) * drawSize.width * 1.2f
-            val endY = startY + (random.nextFloat() - 0.5f) * drawSize.height * 0.5f
-            
-            val veinColor = if (random.nextBoolean()) Color.White else Color(0xFF7B7B7B)
-            
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    com.example.scrollersdashboard.ui.theme.WarmBaseTop,
+                    com.example.scrollersdashboard.ui.theme.WarmBaseMid,
+                    ObsidianBlack
+                )
+            )
+        )
+
+        val random = Random(42)
+        repeat(6) {
+            val startX = random.nextFloat() * size.width
+            val startY = random.nextFloat() * size.height
+            val endX = startX + (random.nextFloat() - 0.5f) * size.width * 0.6f
+            val endY = startY + (random.nextFloat() - 0.5f) * size.height * 0.6f
+
             drawLine(
                 brush = Brush.linearGradient(
                     colors = listOf(
                         Color.Transparent,
-                        veinColor.copy(alpha = 0.06f),
-                        veinColor.copy(alpha = 0.12f),
-                        veinColor.copy(alpha = 0.02f),
+                        Color(0xFFF59E0B).copy(alpha = 0.04f),
                         Color.Transparent
                     )
                 ),
                 start = Offset(startX, startY),
                 end = Offset(endX, endY),
-                strokeWidth = (1.5.dp + (random.nextFloat() * 2).dp).toPx(),
+                strokeWidth = 1.5.dp.toPx(),
                 cap = StrokeCap.Round
             )
         }
-        
-        // Dynamic "cloudy" nebulas for marble depth
-        repeat(5) {
-            val center = Offset(random.nextFloat() * drawSize.width, random.nextFloat() * drawSize.height)
+
+        repeat(3) {
+            val center = Offset(random.nextFloat() * size.width, random.nextFloat() * size.height)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF1A1A1E).copy(alpha = 0.4f), Color.Transparent),
+                    colors = listOf(
+                        Color(0xFFEA580C).copy(alpha = 0.06f),
+                        Color.Transparent
+                    ),
                     center = center,
-                    radius = 300.dp.toPx()
+                    radius = 380.dp.toPx()
                 ),
-                radius = 300.dp.toPx(),
+                radius = 380.dp.toPx(),
                 center = center
             )
         }
-        
-        // Fine grain texture
-        repeat(200) {
-            drawCircle(
-                color = Color.White.copy(alpha = 0.015f),
-                radius = 0.8.dp.toPx(),
-                center = Offset(random.nextFloat() * drawSize.width, random.nextFloat() * drawSize.height)
-            )
-        }
     }
-)
-
-fun Modifier.neumorphicInset(
-    isDarkMode: Boolean,
-    cornerRadius: Dp = 16.dp,
-    depth: Dp = 2.dp
-): Modifier = this.then(
-    Modifier
-        .drawBehind {
-            val drawSize = this.size
-            val shadowColor = if (isDarkMode) Color.Black.copy(alpha = 0.8f) else Color(0xFFA3B1C6).copy(alpha = 0.4f)
-            
-            // Recessed background
-            drawRoundRect(
-                color = if (isDarkMode) Color(0xFF050506) else Color(0xFFEBEBEF),
-                size = drawSize,
-                cornerRadius = CornerRadius(cornerRadius.toPx())
-            )
-            
-            // Top/Left inner shadow
-            drawRoundRect(
-                color = shadowColor,
-                size = drawSize,
-                cornerRadius = CornerRadius(cornerRadius.toPx()),
-                style = Stroke(width = depth.toPx())
-            )
-        }
-        .clip(RoundedCornerShape(cornerRadius))
 )
 
 fun Modifier.liquidGlassButton(
@@ -340,21 +412,12 @@ fun Modifier.liquidGlassButton(
     cornerRadius: Dp = 16.dp
 ): Modifier = this.then(
     if (isPressed) {
-        this.neumorphicInset(isDarkMode, cornerRadius, depth = 4.dp)
+        Modifier
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(Color.Black.copy(alpha = 0.4f))
+            .border(1.dp, GlassBorder, RoundedCornerShape(cornerRadius))
     } else {
-        this.liquidGlassCard(isDarkMode, cornerRadius, elevation = 2.5.dp, alpha = 0.15f)
-            .drawBehind {
-                // Additional shine for buttons
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = 0.08f), Color.Transparent),
-                        center = Offset(size.width * 0.2f, size.height * 0.2f),
-                        radius = size.width * 0.6f
-                    ),
-                    radius = size.width * 0.6f,
-                    center = Offset(size.width * 0.2f, size.height * 0.2f)
-                )
-            }
+        Modifier.liquidGlassCard(isDarkMode, cornerRadius, alpha = 0.12f)
     }
 )
 
@@ -369,8 +432,8 @@ fun PremiumScalingButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.94f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 800f),
+        targetValue = if (isPressed) 0.97f else 1f,
+        animationSpec = tween(120),
         label = "ButtonScale"
     )
     var center by remember { mutableStateOf(Offset.Zero) }
@@ -394,88 +457,122 @@ fun PremiumScalingButton(
 }
 
 @Composable
-fun ScrollerToggle(
-    checked: Boolean,
-    isDarkMode: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+fun OverlayQuickSummaryCard(
+    igCount: Int,
+    ytCount: Int,
+    igTime: String,
+    ytTime: String,
+    igLimit: Int,
+    ytLimit: Int,
     modifier: Modifier = Modifier
 ) {
-    val transition = updateTransition(checked, label = "ToggleTransition")
-    val thumbOffset by transition.animateDp(label = "ThumbOffset") { targetChecked ->
-        if (targetChecked) 38.dp else 4.dp 
-    }
-    
-    val trackColor = if (checked) Color(0xFF34C759).copy(alpha = 0.3f) else (if (isDarkMode) Color(0xFF151518) else Color(0xFFE6E6E9))
-
-    Box(
+    Row(
         modifier = modifier
-            .width(80.dp)
-            .height(44.dp)
-            .neumorphicInset(isDarkMode, cornerRadius = 22.dp, depth = 2.dp)
-            .background(trackColor)
-            .clickable { onCheckedChange(!checked) }
-            .padding(4.dp),
-        contentAlignment = Alignment.CenterStart
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .offset(x = thumbOffset - 4.dp)
-                .size(36.dp)
-                .liquidGlassCard(isDarkMode, cornerRadius = 18.dp, elevation = 1.dp, alpha = 0.9f)
-                .background(
-                    brush = Brush.verticalGradient(
-                        if (isDarkMode) listOf(Color(0xFFE0E0E0), Color(0xFF9E9E9E)) else listOf(Color.White, Color(0xFFE0E0E0))
-                    ),
-                    shape = CircleShape
-                )
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            UsageProgressRing(
+                platform = "instagram",
+                scrollCount = igCount,
+                dailyGoal = igLimit,
+                screenTime = igTime,
+                modifier = Modifier.size(88.dp)
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            UsageProgressRing(
+                platform = "youtube",
+                scrollCount = ytCount,
+                dailyGoal = ytLimit,
+                screenTime = ytTime,
+                modifier = Modifier.size(88.dp)
+            )
+        }
     }
 }
 
 @Composable
 fun ActivityRingCard(label: String, count: Int, target: Int, gradients: List<Color>, textColor: Color, isDarkMode: Boolean) {
-    val subTextColor = textColor.copy(alpha = 0.6f)
-    val actualProgress = (count.toFloat() / target).coerceIn(0f, 1.2f)
+    val subTextColor = Color.White.copy(alpha = 0.5f)
+    val progress = if (target > 0) (count.toFloat() / target).coerceIn(0f, 1.2f) else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 80f),
+        label = "RingProgress"
+    )
     
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
         modifier = Modifier
-            .liquidGlassCard(isDarkMode, cornerRadius = 32.dp)
-            .padding(24.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(32.dp))
+            .background(Color.White.copy(alpha = 0.04f))
+            .border(1.dp, GlassBorder, RoundedCornerShape(32.dp))
+            .padding(20.dp)
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(150.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(120.dp)
-                    .neumorphicInset(isDarkMode, cornerRadius = 60.dp, depth = 2.dp)
-            )
-            
-            AppleStyleRing(actualProgress, gradients, isDarkMode)
-            
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    "$count", 
-                    color = textColor, 
-                    fontSize = 42.sp, 
-                    fontWeight = FontWeight.Black,
-                    lineHeight = 42.sp
-                )
-                Text(
-                    "/${target}", 
-                    color = subTextColor, 
-                    fontSize = 14.sp, 
-                    fontWeight = FontWeight.ExtraBold
-                )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(110.dp)) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val strokeWidth = 12.dp.toPx()
+                    val radius = (size.width - strokeWidth) / 2
+                    
+                    // Track
+                    drawCircle(
+                        color = Color.White.copy(alpha = 0.06f),
+                        radius = radius,
+                        style = Stroke(width = strokeWidth)
+                    )
+                    
+                    // Progress
+                    drawArc(
+                        brush = Brush.linearGradient(gradients),
+                        startAngle = -90f,
+                        sweepAngle = 360f * animatedProgress,
+                        useCenter = false,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    )
+                }
+                
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "$count", 
+                        color = Color.White, 
+                        fontSize = 28.sp, 
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.SansSerif
+                    )
+                    Text(
+                        "/$target", 
+                        color = subTextColor, 
+                        fontSize = 12.sp, 
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
             }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                label.uppercase(), 
+                color = Color.White, 
+                fontSize = 11.sp, 
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.2.sp
+            )
         }
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            label, 
-            color = textColor, 
-            fontSize = 16.sp, 
-            fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 0.5.sp
-        )
     }
 }
 
@@ -483,38 +580,29 @@ fun ActivityRingCard(label: String, count: Int, target: Int, gradients: List<Col
 fun AppleStyleRing(progress: Float, gradients: List<Color>, isDarkMode: Boolean) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
-        animationSpec = spring(dampingRatio = 0.8f, stiffness = 120f),
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 100f),
         label = "RingProgress"
     )
 
-    Canvas(modifier = Modifier.size(130.dp)) {
+    Canvas(modifier = Modifier.size(140.dp).aspectRatio(1f)) {
         val strokeWidth = 16.dp.toPx()
         val radius = (size.width - strokeWidth) / 2
         
+        // Background Track
         drawCircle(
-            color = if (isDarkMode) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.08f),
+            color = RingTrack,
             radius = radius,
-            style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+            style = Stroke(width = strokeWidth)
         )
         
+        // Progress Arc with Gradient
         drawArc(
-            brush = Brush.sweepGradient(
-                0.0f to gradients[0],
-                0.5f to gradients[1],
-                1.0f to gradients.last(),
-            ), 
+            brush = Brush.linearGradient(gradients), 
             startAngle = -90f, 
             sweepAngle = 360f * animatedProgress, 
             useCenter = false, 
             style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
         )
-        
-        if (animatedProgress > 0.01f) {
-            val angle = -90f + 360f * animatedProgress
-            val x = (size.width / 2) + radius * Math.cos(Math.toRadians(angle.toDouble())).toFloat()
-            val y = (size.height / 2) + radius * Math.sin(Math.toRadians(angle.toDouble())).toFloat()
-            drawCircle(Color.White.copy(alpha = 0.4f), radius = strokeWidth / 3.5f, center = Offset(x, y))
-        }
     }
 }
 
@@ -524,35 +612,20 @@ fun BentoLegendItem(color: Color, label: String, count: Int, textColor: Color, s
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .liquidGlassCard(isDarkMode, cornerRadius = 20.dp, elevation = 1.dp)
+            .liquidGlassCard(isDarkMode, cornerRadius = 24.dp)
             .padding(16.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(14.dp)
                 .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(color, color.copy(alpha = 0.7f))))
+                .background(Brush.linearGradient(listOf(color, color.copy(alpha = 0.6f))))
         )
         Spacer(modifier = Modifier.width(16.dp))
-        Text(label, color = textColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.weight(1f))
-        Text("$count", color = textColor, fontSize = 18.sp, fontWeight = FontWeight.Black)
-        Text(" scrolls", color = subTextColor, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
-    }
-}
-
-@Composable
-fun LegendItem(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(12.dp)
-                .clip(CircleShape)
-                .background(color)
-                .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(label, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+        Text("$count", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+        Text(" scrolls", color = Gray500, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
     }
 }
 
@@ -566,7 +639,9 @@ fun NeumorphicTabSwitcher(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .neumorphicInset(isDarkMode, cornerRadius = 24.dp, depth = 2.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(CardBackground)
+            .border(1.dp, GlassBorder, RoundedCornerShape(24.dp))
             .padding(6.dp),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
@@ -576,281 +651,34 @@ fun NeumorphicTabSwitcher(
                 modifier = Modifier
                     .weight(1f)
                     .height(44.dp)
+                    .clip(RoundedCornerShape(18.dp))
                     .then(
-                        if (isSelected) {
-                            Modifier.liquidGlassCard(isDarkMode, cornerRadius = 20.dp, elevation = 1.dp, alpha = 0.9f)
-                        } else {
-                            Modifier
-                        }
+                        if (isSelected) Modifier.background(Color.White.copy(alpha = 0.08f)) else Modifier
                     )
                     .clickable { onTabSelected(tab) },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     tab,
-                    color = if (isSelected) (if (isDarkMode) Color.White else Color.Black) else Color.Gray,
-                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.ExtraBold,
-                    fontSize = 14.sp
+                    color = if (isSelected) Color.White else Gray500,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 13.sp
                 )
             }
         }
     }
 }
 
-@Composable
-fun ClayPillButton(
-    modifier: Modifier,
-    text: String,
-    icon: ImageVector,
-    color: Color,
-    isDarkMode: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, label = "")
-
-    Box(
-        modifier = modifier
-            .height(64.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .liquidGlassButton(isDarkMode, isPressed, cornerRadius = 24.dp)
-            .clickable(interactionSource = interactionSource, indication = null) { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = text,
-                color = if (isDarkMode) Color.White else Color.Black,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-fun NeumorphicDivider(isDarkMode: Boolean, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f))
-    )
-}
-
-@Composable
-fun PermissionItem(title: String, isGranted: Boolean, isDarkMode: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .liquidGlassCard(isDarkMode, cornerRadius = 16.dp, elevation = 1.dp)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = if (isDarkMode) Color.White else Color.Black,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Icon(
-            imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-            contentDescription = if (isGranted) "Granted" else "Not Granted",
-            tint = if (isGranted) Color(0xFF34C759) else Gray500,
-            modifier = Modifier.size(24.dp)
-        )
-    }
+fun formatTotalTime(millis: Long): String {
+    val totalSeconds = millis / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
 
 fun formatMillisToTime(millis: Long): String {
     val totalSeconds = millis / 1000
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
-    if (hours > 0) return "${hours}h ${minutes}m"
-    return "${minutes}m"
-}
-
-fun formatTotalTime(millis: Long): String {
-    val totalSeconds = millis / 1000
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    return "${hours}h ${minutes}m"
-}
-
-// Compatibility helpers
-fun Modifier.skeuomorphicCard(isDarkMode: Boolean, cornerRadius: Dp = 24.dp, elevation: Dp = 1.5.dp): Modifier = 
-    this.liquidGlassCard(isDarkMode, cornerRadius, elevation = elevation)
-
-fun Modifier.skeuomorphicButton(isDarkMode: Boolean, isPressed: Boolean, cornerRadius: Dp = 16.dp): Modifier = 
-    this.liquidGlassButton(isDarkMode, isPressed, cornerRadius)
-
-@Composable
-fun SectionTitle(title: String, icon: ImageVector? = null) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 16.dp)
-    ) {
-        if (icon != null) {
-            Icon(icon, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-        }
-        Text(
-            text = title.uppercase(),
-            color = Color.Gray,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
-    }
-}
-
-@Composable
-fun AlertLimitCardReplica(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    gradient: Brush,
-    borderColor: Color,
-    value: String,
-    onValueChange: (String) -> Unit,
-    unit: String,
-    instruction: String = "Alert after every",
-    footer: String? = null,
-    onDone: () -> Unit = {}
-) {
-    val keyboardController = LocalSoftwareKeyboardController.current
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .drawBehind { 
-                drawRoundRect(gradient, alpha = 0.1f, cornerRadius = CornerRadius(24.dp.toPx()))
-            }
-            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
-            .padding(20.dp)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
-                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(subtitle, color = Color.Gray, fontSize = 12.sp)
-                }
-            }
-            
-            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xFF1F2937).copy(alpha = 0.5f)).padding(16.dp)) {
-                Column {
-                    Text(instruction, color = Color(0xFFD1D5DB), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        BasicTextField(
-                            value = value,
-                            onValueChange = { if (it.all { char -> char.isDigit() }) onValueChange(it) },
-                            textStyle = TextStyle(color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { 
-                                onDone()
-                                keyboardController?.hide()
-                            }),
-                            modifier = Modifier.weight(1f).background(Color(0xFF111827).copy(alpha = 0.5f), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF374151), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
-                            cursorBrush = SolidColor(Color.White)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(unit, color = Color(0xFF9CA3AF), fontWeight = FontWeight.Medium)
-                    }
-                    Text(footer ?: "Alert screen will appear after scrolling $value $unit", color = Color(0xFF6B7280), fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TrackingControlCardReplica(title: String, isTracking: Boolean, onToggle: () -> Unit, gradient: Brush, icon: ImageVector) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
-            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(if (isTracking) "Currently tracking" else "Paused", color = Color(0xFF9CA3AF), fontSize = 12.sp)
-                }
-            }
-            
-            Box(
-                modifier = Modifier
-                    .width(56.dp)
-                    .height(32.dp)
-                    .clip(CircleShape)
-                    .background(if (isTracking) gradient else SolidColor(Color(0xFF374151)))
-                    .clickable { onToggle() }
-                    .padding(4.dp),
-                contentAlignment = if (isTracking) Alignment.CenterEnd else Alignment.CenterStart
-            ) {
-                Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(if (isTracking) Color.White else Color(0xFF9CA3AF)).shadow(elevation = 4.dp, shape = CircleShape))
-            }
-        }
-    }
-}
-
-@Composable
-fun ResetDataCardReplica(title: String, description: String, gradient: Brush, icon: ImageVector, onReset: () -> Unit, accentColor: Color) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color(0xFF1F2937).copy(alpha = 0.3f))
-            .border(1.dp, Color(0xFF374151), RoundedCornerShape(20.dp))
-            .padding(16.dp)
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(gradient), contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(description, color = Color(0xFF9CA3AF), fontSize = 12.sp)
-                }
-            }
-            
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(accentColor.copy(alpha = 0.2f))
-                    .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-                    .clickable { onReset() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text("Reset", color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
+    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
