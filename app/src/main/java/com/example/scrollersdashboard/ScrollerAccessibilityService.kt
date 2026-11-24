@@ -157,6 +157,7 @@ class ScrollerAccessibilityService : AccessibilityService() {
     }
 
     private fun syncScreenTimeWithSystem() {
+        if (!isUsageAccessEnabled(this)) return
         try {
             val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val calendar = Calendar.getInstance()
@@ -387,18 +388,20 @@ class ScrollerAccessibilityService : AccessibilityService() {
     }
 
     private fun startCounterOverlay(initialCount: Int, limit: Int, appName: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) return
         val intent = Intent(this, CounterOverlayService::class.java).apply {
             action = CounterOverlayService.ACTION_SHOW_OVERLAY
             putExtra(CounterOverlayService.EXTRA_COUNT, initialCount)
             putExtra(CounterOverlayService.EXTRA_LIMIT, limit)
             putExtra(CounterOverlayService.EXTRA_APP_NAME, appName)
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+            else startService(intent)
+            isOverlayVisible = true
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Could not start counter overlay", e)
         }
-        isOverlayVisible = true
     }
 
     private fun stopCounterOverlay(immediate: Boolean = true) {

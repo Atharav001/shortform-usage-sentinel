@@ -107,9 +107,10 @@ fun HistoryScreen(
         val sortedDays = byDay.keys.sorted()
         val reducedThree = sortedDays.takeLast(4).size == 4 && sortedDays.takeLast(4)
             .zipWithNext().all { (a, b) ->
-                val adjacent = Calendar.getInstance().apply { time = dateFormat.parse(a)!!; add(Calendar.DAY_OF_YEAR, 1) }
+                val parsed = runCatching { dateFormat.parse(a) }.getOrNull() ?: return@all false
+                val adjacent = Calendar.getInstance().apply { time = parsed; add(Calendar.DAY_OF_YEAR, 1) }
                 dateFormat.format(adjacent.time) == b &&
-                    byDay[b]!!.sumOf { it.scrollCount } < byDay[a]!!.sumOf { it.scrollCount }
+                    (byDay[b]?.sumOf { it.scrollCount } ?: Int.MAX_VALUE) < (byDay[a]?.sumOf { it.scrollCount } ?: 0)
             }
         val morningFree = consecutiveDays(7) { day ->
             eventsByDay[day]?.none { event ->
@@ -263,10 +264,10 @@ fun HistoryOverviewView(allRecords: List<ScrollRecord>, allEvents: List<ScrollEv
         }
 
         val monthFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
-        val monthlyData = allRecords.groupBy { 
-            val date = sdf.parse(it.date)
-            monthFormat.format(date!!)
-        }.map { (month, records) ->
+        val monthlyData = allRecords.mapNotNull { record ->
+            val date = runCatching { sdf.parse(record.date) }.getOrNull() ?: return@mapNotNull null
+            monthFormat.format(date) to record
+        }.groupBy({ it.first }, { it.second }).map { (month, records) ->
             val totalScrolls = records.sumOf { it.scrollCount }
             val totalMillis = records.sumOf { it.screenTimeMillis }
             val recordsByDate = records.groupBy { it.date }
@@ -276,7 +277,7 @@ fun HistoryOverviewView(allRecords: List<ScrollRecord>, allEvents: List<ScrollEv
             }
             
             val calForMonth = Calendar.getInstance()
-            calForMonth.time = monthFormat.parse(month)!!
+            calForMonth.time = runCatching { monthFormat.parse(month) }.getOrNull() ?: Date()
             val totalDaysInMonth = calForMonth.getActualMaximum(Calendar.DAY_OF_MONTH)
             
             HistoryMonthlySummary(

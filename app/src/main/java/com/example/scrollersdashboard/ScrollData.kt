@@ -81,7 +81,7 @@ interface ScrollDao {
     suspend fun setScreenTime(date: String, appType: String, totalMillis: Long) {
         val existing = getRecord(date, appType)
         if (existing == null) insert(ScrollRecord(date = date, appType = appType, scrollCount = 0, screenTimeMillis = totalMillis))
-        else insert(existing.copy(screenTimeMillis = totalMillis))
+        else insert(existing.copy(screenTimeMillis = maxOf(existing.screenTimeMillis, totalMillis)))
     }
 
     @Query("UPDATE scroll_data SET screenTimeMillis = screenTimeMillis + :addedTime WHERE date = :date AND appType = :appType")

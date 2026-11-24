@@ -178,7 +178,13 @@ class CounterOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
         db = AppDatabase.getDatabase(applicationContext)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification("Scroll counter active"))
+        try {
+            startForeground(NOTIFICATION_ID, createNotification("Scroll counter active"))
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Could not start foreground counter", e)
+            stopSelf()
+            return
+        }
 
         setupParams()
 
@@ -363,6 +369,9 @@ class CounterOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, Sa
             isVisibleState.value = true
         } catch (e: Exception) {
             Log.e(TAG, "Show capsule failed: ${e.message}")
+            capsuleComposeView = null
+            isVisibleState.value = false
+            stopSelf()
         }
     }
 

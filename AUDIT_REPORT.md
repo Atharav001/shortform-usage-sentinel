@@ -27,6 +27,9 @@ Android reports view scroll events, not a canonical “new Reel/Short” action.
 | Use a custom ReVanced package | Only known package IDs are recognized. | Vanced plus three YouTube package IDs are supported. Custom package names require a controlled allowlist setting or per-build support. |
 | Open an overlay, switch apps, or cross midnight | Floating service could keep stale data or remain running after hide. | Overlay observer rolls over daily; hide stops the foreground service and it is no longer sticky. Rapid app switching still needs a device run. |
 | Reinstall or restore data | README claimed data never leaves the device. | Documentation now states that Android device backup can apply. No app-operated sync is configured. |
+| Revoke Usage Access after time was recorded | An empty usage query could overwrite the day's screen time with zero. | Sync now requires Usage Access and never reduces an existing daily screen-time value. |
+| Deny overlay permission or restrict foreground service launch | Starting the floating service or adding its window could throw and leave the service running. | Startup and window errors are handled; failed overlays stop their foreground service. |
+| Encounter a malformed legacy date in History | Forced date parsing could crash the History screen. | Invalid record dates are skipped in monthly grouping and achievement comparisons. |
 
 ## Remaining product risks
 
@@ -42,4 +45,4 @@ For each supported package, compare manual video transitions with the in-app cou
 
 ## Verification status
 
-Android XML files parsed successfully in the previous review. A full Gradle build and device run remain unavailable because the machine has roughly 100–200 MB of free disk space; Gradle could not create its generated API jar after the existing build output was cleared. No APK from these changes has been verified.
+Android XML files parsed successfully in the previous review. A full Gradle build and device run remain unavailable because the machine has roughly 100–300 MB of free disk space; Gradle reports `No space left on device` while creating its generated API jar, before Kotlin compilation. No APK from these changes has been verified.
