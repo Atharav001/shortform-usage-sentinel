@@ -5,5 +5,4 @@
     android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagRequestFilterKeyEvents"
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
-    android:notificationTimeout="100"
-    android:packageNames="com.instagram.android,com.google.android.youtube,app.revanced.android.youtube,com.google.android.apps.youtube.revanced" />
+    android:notificationTimeout="100" />

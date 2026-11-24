@@ -18,30 +18,30 @@ Scroller's Dashboard does.
 
 | Feature | Description |
 |---|---|
-| 🎯 Precision Scroll Tracking | Counts every Reel and Short, not just app-open minutes |
+| 🎯 Scroll Tracking | Estimates Reel and Short transitions from Android accessibility scroll events |
 | 🚨 Pattern Interrupt Overlay | Glassmorphic alert screen drawn directly over the target app |
 | ✅ To-Do & Habit Sync | Your goals appear on the alert screen mid-scroll-hole |
-| 📊 Advanced Analytics | Visual trends, 3-day averages, and improvement indicators |
+| 📊 Analytics | Visual trends, daily activity, and rolling weekly comparisons |
 | 🔥 Streak System | Gamified rewards for staying under your scroll limits |
 | 🔒 Biometric Security | Fingerprint / Face Unlock for private usage screens |
-| 🗄️ 100% Local Storage | All data lives on your device — never on a server |
-| 🔋 Low Battery Impact | Background engine activates only when target apps are open |
+| 🗄️ On-device Storage | Activity data is stored in a local Room database |
+| 🔋 Background Tracking | Accessibility service watches supported apps and dismisses its counter when you leave them |
 
 ---
 
 ## ⚙️ How It Works
 
-### 1. The Core Engine — Precision Tracking
+### 1. The Core Engine — Scroll Tracking
 
 At the heart of the app is the `ScrollerAccessibilityService`.
 
-When you enable the Accessibility Service, the app listens to UI events within Instagram and YouTube in real time. Custom-built trackers — `InstagramTracker` and `YouTubeTracker` — analyze screen height and touch events to detect every swipe to a new video. It doesn't merely detect that the app is open; it counts each individual flick.
+When you enable the Accessibility Service, the app listens to UI events within Instagram and YouTube in real time. Custom-built trackers inspect accessibility scroll events and the visible video screen. Android does not provide a guaranteed “new Reel/Short” event, so counts are estimates and can vary with app versions and device accessibility behavior.
 
-The service also periodically syncs with Android's `UsageStatsManager` to ensure the total screen-time displayed matches the system's official records, keeping data accurate and trustworthy.
+With optional Usage Access, the service periodically reads foreground time from Android's `UsageStatsManager`. Screen time is separate from scroll counting.
 
 ```
 User swipes → AccessibilityService captures event
-    → Tracker validates scroll gesture
+    → Tracker checks the visible video context and scroll event
         → Scroll count incremented
             → UsageStatsManager sync applied
 ```
@@ -52,7 +52,7 @@ User swipes → AccessibilityService captures event
 
 This is the app's most powerful feature. Once you reach a pre-configured scroll limit (e.g., 50 Reels), the app triggers a **Real-Time Intervention**:
 
-- **Overlay Technology** — An alert is drawn directly over Instagram or YouTube using Android's overlay permission, making it impossible to ignore.
+- **Overlay Technology** — An accessibility alert appears over the supported app when the configured threshold is reached.
 - **Psychological Redirection** — Instead of a simple "stop" message, the overlay displays your **To-Do List** and **Daily Habits**, placing your actual goals side-by-side with your scroll count.
 - **The Conscious Choice** — You are presented with two options:
   - 🏠 **Quit & Take a Break** — Sends you back to the home screen.
@@ -72,7 +72,7 @@ Scroller's Dashboard treats your productivity and your scrolling as two sides of
 
 **Habit Tracker**
 - For recurring behaviors like *"Drink Water"*, *"Meditate"*, or *"Read for 20 minutes"*.
-- Habit items persist indefinitely but their **completion status resets every 24 hours**.
+- Habit items persist indefinitely; completion is recorded by local calendar date.
 
 **Universal Sync**
 - Tasks and habits added anywhere — on the dashboard, or even from inside the alert overlay mid-scroll — are immediately synced across the entire app.
@@ -84,7 +84,7 @@ Scroller's Dashboard treats your productivity and your scrolling as two sides of
 
 The dashboard serves as a **Command Center** for your digital health.
 
-- **Visual Trends** — Today's scroll count and screen time are compared against your **3-day rolling average**, displayed in clear green (improving) or red (slipping) indicators.
+- **Visual Trends** — The dashboard compares today's app screen time with yesterday; History compares rolling seven-day windows.
 - **Streak System** — Stay under your scroll limit for the day and you earn a streak. Consecutive days of disciplined usage are tracked and celebrated, gamifying the process of intentional living.
 - **Biometric Security** — Users who want to keep their usage habits private can gate detailed analysis screens behind **Fingerprint or Face Unlock**.
 
@@ -92,10 +92,10 @@ The dashboard serves as a **Command Center** for your digital health.
 
 ### 5. Privacy & Efficiency
 
-**Your data never leaves your device.**
+**The app has no account or app-operated sync service.** Android's device backup settings may back up app data.
 
 - All scroll events, tasks, habits, and analytics are stored locally using a **Room Database** (Android's native SQLite abstraction layer).
-- No user accounts. No cloud sync. No data sold or shared.
+- No user accounts or app-operated cloud sync.
 - The background tracking engine is optimized for minimal battery drain, activating only when a target app (Instagram or YouTube) is detected as open.
 
 ---
@@ -119,16 +119,16 @@ The dashboard serves as a **Command Center** for your digital health.
 ### Prerequisites
 
 - Android **6.0 (Marshmallow)** or higher
-- Accessibility Service permission
-- Usage Stats permission (`PACKAGE_USAGE_STATS`)
-- Display over other apps permission (`SYSTEM_ALERT_WINDOW`)
+- Accessibility Service permission for scroll counts
+- Optional Usage Stats permission (`PACKAGE_USAGE_STATS`) for screen time
+- Optional Display over other apps permission (`SYSTEM_ALERT_WINDOW`) for the floating counter
 
 ### Setup Steps
 
 1. **Install** the app and open it.
 2. **Grant Accessibility Service** — Navigate to *Settings → Accessibility → Scroller's Dashboard* and enable it.
-3. **Grant Usage Access** — Navigate to *Settings → Digital Wellbeing / Usage Access* and allow the app.
-4. **Grant Overlay Permission** — Allow the app to display over other apps when prompted.
+3. **Grant Usage Access** if you want screen-time totals.
+4. **Grant Overlay Permission** if you want the floating counter.
 5. **Set your scroll limits** for Instagram Reels and YouTube Shorts.
 6. **Add your To-Do items and Habits** to the Goals page.
 7. Start scrolling — and let the app hold you accountable.
@@ -164,7 +164,7 @@ The dashboard serves as a **Command Center** for your digital health.
     <td align="center">
       <strong>📅 History</strong><br/><br/>
       <img src="https://github.com/user-attachments/assets/1046188d-d2e2-4743-9ddb-df6048492830" alt="History" width="220"/>
-      <br/><sub>Past usage, 3-day averages & scroll trends</sub>
+      <br/><sub>Past usage and scroll trends</sub>
     </td>
     <td align="center">
       <strong>⚙️ Settings</strong><br/><br/>
@@ -184,7 +184,7 @@ The dashboard serves as a **Command Center** for your digital health.
 📱 Scroller's Dashboard
 ├── 🏠  Dashboard        → Live scroll counts, screen time, streak, trend indicators
 ├── 📋  Goals            → To-Do list and Habit tracker with daily/permanent modes
-├── 📊  Analytics        → Historical data, 3-day averages, and improvement charts
+├── 📊  Analytics        → Historical data, seven-day comparisons, and activity charts
 ├── ⚙️  Settings         → Scroll limits, daily refresh, biometric lock, app config
 └── 🚨  Alert Overlay    → Real-time pattern interrupt drawn over Instagram/YouTube
 ```
@@ -200,7 +200,7 @@ The dashboard serves as a **Command Center** for your digital health.
 | `SYSTEM_ALERT_WINDOW` | To display the intervention overlay above other apps |
 | `USE_BIOMETRIC` | To lock detailed analytics behind fingerprint / face unlock |
 
-> All permissions are used exclusively on-device. No data is transmitted externally.
+> Tracking is processed on-device. Android backup behavior depends on device settings.
 
 ---
 

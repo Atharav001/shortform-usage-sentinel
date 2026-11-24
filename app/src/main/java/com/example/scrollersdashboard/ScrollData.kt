@@ -10,9 +10,13 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.Transaction
+import androidx.room.Index
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "scroll_data")
+@Entity(tableName = "scroll_data", indices = [Index(value = ["date", "appType"], unique = true)])
 data class ScrollRecord(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val date: String,
@@ -61,11 +65,27 @@ interface ScrollDao {
     @Query("UPDATE scroll_data SET scrollCount = scrollCount + 1 WHERE date = :date AND appType = :appType")
     suspend fun incrementScroll(date: String, appType: String)
 
+    @Transaction
+    suspend fun recordScroll(event: ScrollEvent): Int {
+        val existing = getRecord(event.date, event.appType)
+        if (existing == null) {
+            insert(ScrollRecord(date = event.date, appType = event.appType, scrollCount = 1))
+        } else {
+            incrementScroll(event.date, event.appType)
+        }
+        insertEvent(event)
+        return (existing?.scrollCount ?: 0) + 1
+    }
+
+    @Transaction
+    suspend fun setScreenTime(date: String, appType: String, totalMillis: Long) {
+        val existing = getRecord(date, appType)
+        if (existing == null) insert(ScrollRecord(date = date, appType = appType, scrollCount = 0, screenTimeMillis = totalMillis))
+        else insert(existing.copy(screenTimeMillis = totalMillis))
+    }
+
     @Query("UPDATE scroll_data SET screenTimeMillis = screenTimeMillis + :addedTime WHERE date = :date AND appType = :appType")
     suspend fun addScreenTime(date: String, appType: String, addedTime: Long)
-
-    @Query("UPDATE scroll_data SET scrollCount = 0 WHERE date = :date AND appType = :appType")
-    suspend fun resetCount(date: String, appType: String)
 
     @Query("SELECT * FROM scroll_data WHERE date = :date")
     fun getRecordsForDate(date: String): Flow<List<ScrollRecord>>
@@ -76,9 +96,6 @@ interface ScrollDao {
     @Query("SELECT * FROM scroll_data ORDER BY date DESC")
     fun getAllRecords(): Flow<List<ScrollRecord>>
 
-    @Query("DELETE FROM scroll_data")
-    suspend fun deleteAll()
-
     @Insert
     suspend fun insertEvent(event: ScrollEvent)
 
@@ -87,9 +104,6 @@ interface ScrollDao {
 
     @Query("SELECT * FROM scroll_events WHERE timestamp >= :startTime AND timestamp <= :endTime ORDER BY timestamp ASC")
     fun getEventsInRange(startTime: Long, endTime: Long): Flow<List<ScrollEvent>>
-
-    @Query("DELETE FROM scroll_events WHERE date = :date AND appType = :appType")
-    suspend fun deleteEventsForToday(date: String, appType: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveSetting(setting: UserSetting)
@@ -127,11 +141,25 @@ interface ScrollDao {
     suspend fun deleteHabit(id: Int)
 }
 
-@Database(entities = [ScrollRecord::class, ScrollEvent::class, UserSetting::class, TodoTask::class, HabitTask::class], version = 5)
+@Database(entities = [ScrollRecord::class, ScrollEvent::class, UserSetting::class, TodoTask::class, HabitTask::class], version = 6)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun scrollDao(): ScrollDao
 
     companion object {
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS `todo_tasks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `isCompleted` INTEGER NOT NULL, `date` TEXT NOT NULL)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `habit_tasks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `lastCompletedDate` TEXT NOT NULL)")
+            }
+        }
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("UPDATE scroll_data SET scrollCount = (SELECT MAX(other.scrollCount) FROM scroll_data AS other WHERE other.date = scroll_data.date AND other.appType = scroll_data.appType), screenTimeMillis = (SELECT MAX(other.screenTimeMillis) FROM scroll_data AS other WHERE other.date = scroll_data.date AND other.appType = scroll_data.appType)")
+                db.execSQL("DELETE FROM scroll_data WHERE id NOT IN (SELECT MIN(id) FROM scroll_data GROUP BY date, appType)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_scroll_data_date_appType ON scroll_data (date, appType)")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -142,7 +170,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "scroller-db"
                 )
-                .fallbackToDestructiveMigration()
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                 .build()
                 INSTANCE = instance
                 instance
