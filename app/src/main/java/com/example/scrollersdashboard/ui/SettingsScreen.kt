@@ -43,13 +43,20 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
     var ytLimit by remember { mutableStateOf("30") }
     var trackIG by remember { mutableStateOf(true) }
     var trackYT by remember { mutableStateOf(true) }
+    var refreshDailyTodo by remember { mutableStateOf(true) }
+    val today = rememberLocalDate()
     var alertOnlyAfterLimit by remember { mutableStateOf(true) }
     var alertsEnabled by remember { mutableStateOf(true) }
     var overlayCounterEnabled by remember { mutableStateOf(false) }
     var overlayBrainEmojis by remember { mutableStateOf(true) }
     var overlayOpacity by remember { mutableFloatStateOf(0.85f) }
+    var settingsLoaded by remember { mutableStateOf(false) }
 
     fun saveAndGoBack(backCenter: Offset) {
+        if (!settingsLoaded) {
+            onBack(backCenter)
+            return
+        }
         scope.launch {
             val dao = db.scrollDao()
             dao.saveSetting(UserSetting("limit_ig", normalizedLimit(dailyIgLimit, 100)))
@@ -58,6 +65,7 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
             dao.saveSetting(UserSetting("alert_gap_yt", normalizedGap(ytLimit, 30)))
             dao.saveSetting(UserSetting("track_ig", trackIG.toString()))
             dao.saveSetting(UserSetting("track_yt", trackYT.toString()))
+            dao.setDailyTodoMode(today, refreshDailyTodo)
             dao.saveSetting(UserSetting("alert_only_after_limit", alertOnlyAfterLimit.toString()))
             dao.saveSetting(UserSetting("alert_screen_enabled", alertsEnabled.toString()))
             dao.saveSetting(UserSetting("overlay_counter_enabled", overlayCounterEnabled.toString()))
@@ -75,11 +83,13 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
         ytLimit = db.scrollDao().getSetting("alert_gap_yt") ?: "30"
         trackIG = db.scrollDao().getSetting("track_ig")?.toBoolean() ?: true
         trackYT = db.scrollDao().getSetting("track_yt")?.toBoolean() ?: true
+        refreshDailyTodo = db.scrollDao().getSetting("refresh_daily_todo")?.toBoolean() ?: true
         alertOnlyAfterLimit = db.scrollDao().getSetting("alert_only_after_limit")?.toBoolean() ?: true
         alertsEnabled = db.scrollDao().getSetting("alert_screen_enabled")?.toBoolean() ?: true
         overlayCounterEnabled = db.scrollDao().getSetting("overlay_counter_enabled")?.toBoolean() ?: false
         overlayBrainEmojis = db.scrollDao().getSetting("overlay_brain_emojis")?.toBoolean() ?: true
         overlayOpacity = (db.scrollDao().getSetting("overlay_opacity")?.toIntOrNull() ?: 85) / 100f
+        settingsLoaded = true
     }
 
     Box(modifier = Modifier.fillMaxSize().marbleBackground()) {
@@ -319,6 +329,23 @@ fun SettingsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Uni
                             },
                             gradient = Brush.linearGradient(BlueGradient),
                             icon = Icons.Default.PlayArrow
+                        )
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        SectionTitle("Goals", Icons.Default.CheckCircle)
+                        TrackingControlCardReplica(
+                            title = "Refresh tasks daily",
+                            isTracking = refreshDailyTodo,
+                            onToggle = {
+                                val next = !refreshDailyTodo
+                                scope.launch {
+                                    db.scrollDao().setDailyTodoMode(today, next)
+                                }
+                                refreshDailyTodo = next
+                            },
+                            gradient = Brush.linearGradient(TealGradient),
+                            icon = Icons.Default.CheckCircle
                         )
 
                         Spacer(modifier = Modifier.height(32.dp))

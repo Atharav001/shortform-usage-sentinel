@@ -4,12 +4,32 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.scrollersdashboard.ui.theme.CardBackground
 import com.example.scrollersdashboard.ui.theme.GlassBorder
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun rememberLocalDate(): String {
+    var date by remember { mutableStateOf(SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
+    return date
+}
 
 // --- UI Constants ---
 val SharpRoundedCorner = 28.dp // M3 ExtraLarge standard

@@ -130,6 +130,16 @@ interface ScrollDao {
     @Query("DELETE FROM todo_tasks WHERE date < :today")
     suspend fun deleteOldTodos(today: String)
 
+    @Query("UPDATE todo_tasks SET date = :toDate WHERE date = :fromDate")
+    suspend fun moveTodos(fromDate: String, toDate: String)
+
+    @Transaction
+    suspend fun setDailyTodoMode(today: String, enabled: Boolean) {
+        val previous = getSetting("refresh_daily_todo")?.toBoolean() ?: true
+        if (previous != enabled) moveTodos(if (previous) today else "permanent_todo", if (enabled) today else "permanent_todo")
+        saveSetting(UserSetting("refresh_daily_todo", enabled.toString()))
+    }
+
     // --- Habit Tasks ---
     @Query("SELECT * FROM habit_tasks ORDER BY id DESC")
     fun getHabitTasks(): Flow<List<HabitTask>>

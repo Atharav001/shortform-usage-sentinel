@@ -175,9 +175,9 @@ class ScrollerAccessibilityService : AccessibilityService() {
 
             stats.forEach { (pkg, usage) ->
                 val p = pkg.lowercase()
-                if (p.contains("instagram")) {
+                if (p == "com.instagram.android") {
                     igTime += usage.totalTimeInForeground
-                } else if (p.contains("youtube") && p != packageName.lowercase()) {
+                } else if (p in YOUTUBE_PACKAGES) {
                     ytTime += usage.totalTimeInForeground
                 }
             }

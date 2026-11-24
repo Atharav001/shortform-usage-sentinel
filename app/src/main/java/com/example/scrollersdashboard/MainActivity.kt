@@ -932,7 +932,7 @@ fun BottomNavItem(label: String, icon: ImageVector, isSelected: Boolean, modifie
 fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) {
     var selectedView by remember { mutableStateOf("habits") }
     val scope = rememberCoroutineScope()
-    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    val today = rememberLocalDate()
     val keyboardController = LocalSoftwareKeyboardController.current
     
     val habitTasks by db.scrollDao().getHabitTasks().collectAsState(initial = emptyList())
@@ -942,7 +942,7 @@ fun GoalsScreen(db: AppDatabase, isDarkMode: Boolean, onBack: (Offset) -> Unit) 
 
     val todoTasks by (if (isRefreshDaily) db.scrollDao().getTodoTasks(today) else db.scrollDao().getTodoTasks("permanent_todo")).collectAsState(initial = emptyList())
 
-    LaunchedEffect(isRefreshDaily) {
+    LaunchedEffect(isRefreshDaily, today) {
         if (isRefreshDaily) {
             db.scrollDao().deleteOldTodos(today)
         }

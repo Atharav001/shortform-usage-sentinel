@@ -28,8 +28,12 @@ Android reports view scroll events, not a canonical “new Reel/Short” action.
 | Open an overlay, switch apps, or cross midnight | Floating service could keep stale data or remain running after hide. | Overlay observer rolls over daily; hide stops the foreground service and it is no longer sticky. Rapid app switching still needs a device run. |
 | Reinstall or restore data | README claimed data never leaves the device. | Documentation now states that Android device backup can apply. No app-operated sync is configured. |
 | Revoke Usage Access after time was recorded | An empty usage query could overwrite the day's screen time with zero. | Sync now requires Usage Access and never reduces an existing daily screen-time value. |
+| Use another package containing “instagram” or “youtube” | Broad package-name matching could add another app's foreground time to the displayed total. | Screen-time sync now uses the same explicit supported package allowlist as scroll tracking. |
 | Deny overlay permission or restrict foreground service launch | Starting the floating service or adding its window could throw and leave the service running. | Startup and window errors are handled; failed overlays stop their foreground service. |
 | Encounter a malformed legacy date in History | Forced date parsing could crash the History screen. | Invalid record dates are skipped in monthly grouping and achievement comparisons. |
+| Leave Settings with the system Back button or before settings finish loading | A pending save could be cancelled or defaults could overwrite existing values. | Back now waits for the save before navigation, and an early exit skips writes until settings have loaded. |
+| Switch daily tasks to permanent tasks | The setting existed but had no visible control; switching modes would make tasks appear to vanish. | Settings now offers a mode control and moves existing tasks with the mode change in one database transaction. |
+| Keep Goals open through midnight | The screen retained yesterday's date and could show or complete the wrong day's tasks. | Goals and the goal panel now refresh the local date while open. |
 
 ## Remaining product risks
 
@@ -45,4 +49,4 @@ For each supported package, compare manual video transitions with the in-app cou
 
 ## Verification status
 
-Android XML files parsed successfully in the previous review. A full Gradle build and device run remain unavailable because the machine has roughly 100–300 MB of free disk space; Gradle reports `No space left on device` while creating its generated API jar, before Kotlin compilation. No APK from these changes has been verified.
+Android XML files parsed successfully in the previous review. A full Gradle build and device run remain unavailable because the machine has roughly 100–300 MB of free disk space; Gradle reports `No space left on device` while creating its generated API jar, before Kotlin compilation. No APK from these changes has been verified. The migration SQL was exercised against duplicate and version 4-like rows in an in-memory SQLite database.

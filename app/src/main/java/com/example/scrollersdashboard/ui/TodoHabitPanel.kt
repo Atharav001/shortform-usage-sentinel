@@ -37,7 +37,7 @@ import java.util.*
 @Composable
 fun TodoHabitPanel(db: AppDatabase, appName: String, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    val today = rememberLocalDate()
     
     val refreshDailyState by db.scrollDao().getSettingFlow("refresh_daily_todo").collectAsState(initial = "true")
     val isRefreshDaily = refreshDailyState?.toBoolean() ?: true
